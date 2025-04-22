@@ -1,0 +1,19 @@
+name = "healthcare-procurement"
+main = "workers-site/index.js"
+compatibility_date = "2025-04-01"
+
+[build]
+command = "pnpm run build"
+
+[site]
+bucket = ".next/static"
+
+[env.production]
+workers_dev = true
+vars = { NEXT_PUBLIC_API_URL = "https://your-backend-api-url.com/api" }
+
+[build.upload]
+format = "service-worker"
+
+[build.environment]
+NODE_VERSION = "20" 
