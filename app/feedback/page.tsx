@@ -15,6 +15,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFo
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useState } from "react"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { supabase } from "@/lib/supabase"
+import React, { useEffect } from "react"
 
 // Define types for our feedback items
 interface BaseFeedbackItem {
@@ -97,6 +99,9 @@ export default function FeedbackPage() {
   const [responseText, setResponseText] = useState("")
   const [feedbackStatus, setFeedbackStatus] = useState("")
   const [feedbackTab, setFeedbackTab] = useState("details")
+
+  // State for fetched items
+  const [fetchedFeedItems, setFetchedFeedItems] = useState<FeedItem[]>([])
 
   // Find product images from inventory data
   const gloveImage = inventoryData.find(item => item.name === "Surgical Gloves (Medium)")?.image
@@ -317,6 +322,73 @@ export default function FeedbackPage() {
     }
   }
 
+  // Test Supabase connection and fetch data
+  const fetchSupabaseFeedback = async () => {
+    try {
+      // Sign in first (if not already)
+      // In a real app, handle session management properly
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: 'test@example.com',
+          password: 'test123'
+        })
+        if (signInError) {
+          console.error('Error signing in:', signInError.message)
+          return
+        }
+        console.log('Signed in successfully')
+      }
+
+      // Then fetch feedback
+      const { data: supabaseFeedback, error } = await supabase
+        .from('feedback')
+        .select('*')
+        .order('timestamp', { ascending: false })
+      
+      if (error) {
+        console.error('Error fetching feedback:', error.message)
+        return
+      }
+
+      console.log('Successfully fetched feedback items:', supabaseFeedback)
+      
+      // Map Supabase data to FeedItem type
+      const mappedItems: FeedItem[] = supabaseFeedback.map((item: any) => {
+        // Map Supabase data to FeedItem fields
+        const feedItem: FeedbackItem = {
+          id: item.id, // Keep track of the original ID
+          type: 'feedback',
+          product: item.product,
+          image: undefined, // Leave main image undefined for now, use placeholder
+          user: item.user_id || 'Anonymous',
+          department: item.department || 'Unknown', // Add department if available
+          rating: item.rating,
+          comment: item.text,
+          date: new Date(item.timestamp).toLocaleDateString(),
+          status: item.status || 'New',
+          brand: item.brand || undefined,
+          critical: item.is_critical || false, // Map is_critical
+          // Map image_url to attachedPhotos array
+          attachedPhotos: item.image_url ? [item.image_url] : [],
+          // Add other fields as necessary
+          // procurementResponse, procurementResponseDate etc. might be null/undefined
+        };
+        return feedItem;
+      });
+
+      setFetchedFeedItems(mappedItems);
+      
+    } catch (err) {
+      console.error('Error in Supabase connection/fetch:', err)
+    }
+  }
+
+  // Call the fetch function when component mounts
+  useEffect(() => {
+    fetchSupabaseFeedback()
+  }, [])
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -348,7 +420,7 @@ export default function FeedbackPage() {
               <Card className="h-full">
                 <CardContent className="pt-6">
                   <div className="space-y-4">
-                    {allFeedItems.map((item, i) => (
+                    {[...fetchedFeedItems, ...allFeedItems].map((item, i) => (
                       <div key={i} className="border rounded-lg p-4">
                         <div className="flex flex-col gap-4">
                           <div className={`flex justify-between items-start p-3 rounded-md ${

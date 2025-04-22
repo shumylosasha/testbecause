@@ -395,8 +395,20 @@ export default function InventoryItemPage() {
                         <p className="font-medium">{item?.vendors?.find(v => v.status.isCurrentVendor)?.name || 'No current vendor'}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">Contact</p>
-                        <p className="font-medium">John Smith, Account Manager</p>
+                        <p className="text-sm text-muted-foreground">Supplier Rating</p>
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Star
+                                key={star}
+                                className={`h-4 w-4 ${
+                                  star <= 4 ? "fill-amber-400 text-amber-400" : "text-gray-300"
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <span className="text-sm font-medium">4.2/5.0</span>
+                        </div>
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Manufacturer</p>
@@ -410,9 +422,22 @@ export default function InventoryItemPage() {
                         <p className="text-sm text-muted-foreground">Reorder Quantity</p>
                         <p className="font-medium">{item.requiredUnits} units</p>
                       </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 pt-2">
                       <div>
-                        <p className="text-sm text-muted-foreground">Last Updated</p>
-                        <p className="font-medium">2 days ago</p>
+                        <p className="text-sm text-muted-foreground">Replenishment</p>
+                        <p className="font-medium">12,000 units in stock | Refill expected in 5 days</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Lead Times</p>
+                        <p className="font-medium">Max output: 20,000 units/week | Next batch: 4 days delay</p>
+                      </div>
+                    </div>
+                    <div className="pt-2">
+                      <p className="text-sm text-muted-foreground">Risk Alerts</p>
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <p className="font-medium text-amber-700">Delay risk (China lockdown)</p>
                       </div>
                     </div>
                   </CardContent>
