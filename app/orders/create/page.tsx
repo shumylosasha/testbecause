@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils"
 import type { InventoryItem } from "@/data/inventory-data"
 import { ordersData, type Order } from "@/data/orders-data"
 import Image from "next/image"
+import { RFQDialog } from "./components/RFQDialog"
 
 interface Feedback {
   hospitalName: string; // Keep hospitalName
@@ -1236,50 +1237,26 @@ export default function CreateOrderPage() {
     setShowRfqDialog(true);
   };
 
-  const handleConfirmRFQ = async () => {
+  const handleSendRFQ = async (data: {
+    items: { id: string; quantity: number }[];
+    vendors: { id: string; sendEmail: boolean; initiateAiCall: boolean }[];
+    notes: string;
+  }) => {
     setIsGeneratingRfq(true);
-    
-    // Group by item first, then by vendor
-    const itemVendorMap = new Map();
-    
-    selectedVendorActions.forEach(action => {
-      if (!itemVendorMap.has(action.itemId)) {
-        const itemDetails = selectedItems.find(item => item.id === action.itemId);
-        itemVendorMap.set(action.itemId, {
-          itemDetails,
-          vendors: []
-        });
-      }
-      
-      const itemEntry = itemVendorMap.get(action.itemId);
-      itemEntry.vendors.push({
-        vendorId: action.vendorId,
-        vendorName: action.vendor.name,
-        vendorDetails: action.vendor
-      });
-    });
-    
-    // Create structured data for RFQ
-    const rfqData = {
-      id: `RFQ-${Date.now()}`,
-      created: new Date().toISOString(),
-      status: "Draft",
-      items: Array.from(itemVendorMap.entries()).map(([itemId, data]) => ({
-        id: itemId,
-        name: data.itemDetails?.name || 'Unknown Item',
-        sku: data.itemDetails?.sku || 'Unknown SKU',
-        quantity: data.itemDetails?.quantity || 0,
-        vendors: data.vendors
-      }))
-    };
-
     try {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1500));
       
       // Store for navigation to the RFQ page
-      sessionStorage.setItem('rfqDataForPreparation', JSON.stringify(rfqData));
-      setShowRfqDialog(false);
+      sessionStorage.setItem('rfqDataForPreparation', JSON.stringify({
+        id: `RFQ-${Date.now()}`,
+        created: new Date().toISOString(),
+        status: "Draft",
+        items: data.items,
+        vendors: data.vendors,
+        notes: data.notes
+      }));
+      
       router.push('/orders/quotes/create');
     } catch (error) {
       console.error('Error generating RFQ:', error);
@@ -2591,6 +2568,15 @@ export default function CreateOrderPage() {
           </>
         </AnimatePresence>
       )}
+
+      {/* Add RFQDialog */}
+      <RFQDialog
+        open={showRfqDialog}
+        onOpenChange={setShowRfqDialog}
+        items={selectedItems}
+        selectedVendors={selectedVendors}
+        onSend={handleSendRFQ}
+      />
     </>
   )
 }

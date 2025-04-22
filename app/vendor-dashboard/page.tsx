@@ -8,8 +8,7 @@ import {
   TrendingUp, 
   CheckCircle2, 
   Clock, 
-  Package, 
-  AlertTriangle
+  Package
 } from "lucide-react"
 import Link from "next/link"
 import { DynamicDate } from "../components/DynamicDate"
@@ -96,7 +95,7 @@ export default function VendorDashboard() {
         {/* Recent RFQs */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Recent RFQs</CardTitle>
+            <CardTitle className="text-lg font-semibold text-primary">Recent RFQs</CardTitle>
             <Button variant="outline" size="sm" asChild>
               <Link href="/vendor-dashboard/rfq">View All</Link>
             </Button>
@@ -106,12 +105,12 @@ export default function VendorDashboard() {
               {rfqList.map((item, i) => (
                 <div key={i} className="flex items-center justify-between border-b pb-3">
                   <div>
-                    <div className="font-medium">{item.id}</div>
+                    <div className="font-medium text-primary">{item.id}</div>
                     <div className="text-sm text-muted-foreground">{item.hospital}</div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="text-sm text-right">{item.dueDate}</div>
-                    <Badge variant={item.status === "urgent" ? "destructive" : "outline"}>
+                    <div className="text-sm text-right text-muted-foreground">{item.dueDate}</div>
+                    <Badge variant={item.status === "urgent" ? "destructive" : "outline"} className="font-medium">
                       {item.status === "urgent" ? "Due Soon" : "Pending"}
                     </Badge>
                     <Button size="sm" variant="outline" asChild>
@@ -127,7 +126,7 @@ export default function VendorDashboard() {
         {/* Recent Orders */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Recent Orders</CardTitle>
+            <CardTitle className="text-lg font-semibold text-primary">Recent Orders</CardTitle>
             <Button variant="outline" size="sm" asChild>
               <Link href="/vendor-orders">View All</Link>
             </Button>
@@ -156,16 +155,16 @@ export default function VendorDashboard() {
               ].map((item, i) => (
                 <div key={i} className="flex items-center justify-between border-b pb-3">
                   <div>
-                    <div className="font-medium">{item.id}</div>
+                    <div className="font-medium text-primary">{item.id}</div>
                     <div className="text-sm text-muted-foreground">{item.hospital}</div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="text-sm text-right">{item.date}</div>
+                    <div className="text-sm text-right text-muted-foreground">{item.date}</div>
                     <Badge variant={
                       item.status === "shipped" ? "secondary" : 
                       item.status === "processing" ? "outline" : 
                       "default"
-                    }>
+                    } className="font-medium">
                       {item.status === "shipped" ? (
                         <div className="flex items-center gap-1">
                           <Package className="h-3 w-3" />
@@ -187,52 +186,6 @@ export default function VendorDashboard() {
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Action Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-primary/5 border-primary/20">
-          <CardHeader>
-            <CardTitle className="text-center flex items-center justify-center gap-2">
-              <FileText className="h-5 w-5" />
-              <span>RFQ Response</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center justify-center space-y-4 text-center">
-            <p className="text-sm">Respond to pending RFQs or submit a new quote for hospital requests</p>
-            <Button asChild>
-              <Link href={`/vendor-dashboard/rfq/${rfqList[0].id}`}>Submit Quote</Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-secondary/5 border-secondary/20">
-          <CardHeader>
-            <CardTitle className="text-center flex items-center justify-center gap-2">
-              <Package className="h-5 w-5" />
-              <span>Catalog Management</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center justify-center space-y-4 text-center">
-            <p className="text-sm">Update product information, pricing, or add new items to your catalog</p>
-            <Button variant="secondary" asChild>
-              <Link href="/vendor-catalog">Manage Catalog</Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-muted/50 border-muted">
-          <CardHeader>
-            <CardTitle className="text-center flex items-center justify-center gap-2">
-              <AlertTriangle className="h-5 w-5" />
-              <span>Supply Chain Alerts</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center justify-center space-y-4 text-center">
-            <p className="text-sm">Report potential supply chain disruptions or shortages</p>
-            <Button variant="outline">Report Issue</Button>
           </CardContent>
         </Card>
       </div>

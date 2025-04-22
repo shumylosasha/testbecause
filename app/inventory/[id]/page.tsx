@@ -311,6 +311,17 @@ export default function InventoryItemPage() {
                       25 units. The current supplier has been reliable with consistent quality.
                     </p>
                   </div>
+
+                  {/* AI Tariff Alert */}
+                  <div className="mt-4 p-4 rounded-lg border border-red-200 bg-red-50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Bot className="h-4 w-4 text-red-600" />
+                      <h4 className="font-medium text-red-900">AI Tariff Alert</h4>
+                    </div>
+                    <p className="text-sm text-red-800">
+                      15% tariff increase on {item.manufacturer} imports. Impact: +${(item.unitPrice * 0.15).toFixed(2)}/unit.
+                    </p>
+                  </div>
                 </div>
               </div>
             </CardContent>
