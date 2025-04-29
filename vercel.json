@@ -1,8 +1,9 @@
 {
   "version": 2,
-  "buildCommand": "pnpm run build",
+  "buildCommand": "NODE_OPTIONS='--max-old-space-size=4096' pnpm run build",
   "installCommand": "pnpm install",
   "framework": "nextjs",
+  "regions": ["iad1"],
   "builds": [
     {
       "src": "package.json",

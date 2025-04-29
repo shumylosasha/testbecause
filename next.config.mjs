@@ -24,6 +24,29 @@ const nextConfig = {
     ],
   },
   output: 'standalone',
+  // Optimize memory usage
+  experimental: {
+    optimizeCss: true,
+    optimizePackageImports: [
+      '@radix-ui/react-*',
+      'lucide-react',
+      'framer-motion',
+    ],
+  },
+  // Increase memory limit for build
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.optimization = {
+        ...config.optimization,
+        splitChunks: {
+          chunks: 'all',
+          minSize: 20000,
+          maxSize: 250000,
+        },
+      }
+    }
+    return config
+  },
   // Removing API rewrites that point to the backend
   // async rewrites() {
   //   return [
