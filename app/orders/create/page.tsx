@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { ChevronLeft, FileUp, Loader2, Plus, Search, Trash2, TrendingDown, BookOpen, RefreshCw, ExternalLink, Sparkles, Star, StarHalf, MessageSquare, Mail, ChevronDown, MessageSquareText, Scale, Building2, History, AlertTriangle, FileText, ShoppingCart, BookmarkPlus, Package, DollarSign, X, ChevronRight, CheckCircle2, Clock, CheckCircle, PhoneCall, Filter, XCircle, ShieldCheck, ArrowUpDown, Minus, Truck, Box, Users, ClipboardList, AlertCircle } from "lucide-react"
+import { ChevronLeft, FileUp, Loader2, Plus, Search, Trash2, TrendingDown, BookOpen, RefreshCw, ExternalLink, Sparkles, Star, StarHalf, MessageSquare, Mail, ChevronDown, MessageSquareText, Scale, Building2, History, AlertTriangle, FileText, ShoppingCart, BookmarkPlus, Package, DollarSign, X, ChevronRight, CheckCircle2, Clock, CheckCircle, PhoneCall, Filter, XCircle, ShieldCheck, ArrowUpDown, Minus, Truck, Box, Users, ClipboardList, AlertCircle, Calendar } from "lucide-react"
 import { inventoryData } from "@/data/inventory-data"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
@@ -31,56 +31,31 @@ import type { InventoryItem } from "@/data/inventory-data"
 import { ordersData, type Order } from "@/data/orders-data"
 import Image from "next/image"
 import { RFQDialog } from "./components/RFQDialog"
+import OrderDetailsOverlay from "./components/OrderDetailsOverlay"
+import { OrderSidebar } from "./components/OrderSidebar"
+import { type Vendor, type OrderItem } from '@/types/orders';
+import { Select, SelectTrigger, SelectValue, SelectItem, SelectContent } from "@/components/ui/select"
 
 interface Feedback {
-  hospitalName: string; // Keep hospitalName
+  item: OrderItem;
   rating: number;
   comment: string;
   date: string;
 }
 
-interface Vendor {
-  id: string;
-  name: string;
-  image_url?: string;
-  pricePerUnit: number;
-  savings?: number | null;
-  manufacturer?: string; // Keep optional
-  compliance?: string;
-  shipping?: string;
-  packaging?: string; // Keep optional
-  notes?: {
-    hospitalUsage?: string;
-    stockWarning?: string;
-    recentPurchases?: string;
-  };
-  url?: string;
-  status: {
-    isCurrentVendor: boolean;
-    isSelected: boolean;
-  };
-  delivery?: string;
-  qualityRating?: number;
-  contactEmail?: string;
-  isDefault?: boolean;
-  feedback?: Feedback[];
-  price?: number; // Keep optional for potential legacy use?
-}
-
 interface SelectedVendorAction {
   itemId: string;
-  vendorId: string;
   vendor: Vendor;
-  action: string; // Add the action property to fix the TypeScript error
+  action: 'add' | 'remove';
 }
 
 interface OrderDetailsOverlayProps {
   isOpen: boolean;
   onClose: () => void;
-  item: OrderItem | null; // Allow null
-  alternativeVendors: Vendor[]; // Use Vendor[] type
+  item: OrderItem | null;
+  alternativeVendors: Vendor[];
   setSelectedItems?: React.Dispatch<React.SetStateAction<OrderItem[]>>;
-  handleFindAlternatives?: (item: OrderItem) => void; // Match function signature
+  handleFindAlternatives?: (item: OrderItem) => void;
   loadingAlternatives?: { [key: string]: boolean };
   renderStars: (rating: number) => React.ReactNode;
   selectedVendors?: { [key: string]: string[] };
@@ -125,12 +100,12 @@ interface Swap {
   isDefault?: boolean;
 }
 
-interface BaseItem { // Re-define BaseItem explicitly for clarity
+interface BaseItem {
   id: string;
   name: string;
   quantity: number;
-  unit?: string; // Make optional if not always present
-  price?: number; // Make optional if not always present
+  unit?: string;
+  price?: number;
   currentVendor?: string;
   unitPrice?: number;
   image?: string;
@@ -147,12 +122,14 @@ interface BaseItem { // Re-define BaseItem explicitly for clarity
   requiredUnits?: number;
 }
 
-interface OrderItem extends BaseItem {
+interface OrderItem extends OrderItem {
   selectedVendor?: Vendor;
-  selectedVendorIds: string[]; // Make required as it seems intended
+  selectedVendorIds: string[];
   selectedVendors?: Vendor[];
   vendors: Vendor[];
-  quantity: number; // Ensure quantity is present
+  quantity: number;
+  unit: string;
+  price: number;
 }
 
 const VENDOR_LOGOS = {
@@ -360,713 +337,13 @@ const MOCK_ALTERNATIVES = {
   ]
 };
 
-const OrderDetailsOverlay: React.FC<OrderDetailsOverlayProps> = ({ 
-  isOpen, 
-  onClose, 
-  item, 
-  alternativeVendors,
-  setSelectedItems,
-  handleFindAlternatives,
-  loadingAlternatives,
-  renderStars,
-  selectedVendors,
-  setSelectedVendors,
-  setSelectedVendorActions,
-  onAddAlternativeVendor
-}) => {
-  const overlayRef = React.useRef<HTMLDivElement>(null);
-  const [chartVisible, setChartVisible] = useState(false);
-  const [activeTab, setActiveTab] = useState("details");
-  const [expandedItems, setExpandedItems] = useState<{ [key: string]: boolean }>({});
-  const [localItem, setLocalItem] = useState<OrderItem | null>(null);
-  const [productFeedback] = useState<{ [key: string]: Feedback[] }>({
-    'default-feedback': [
-      { hospitalName: "Dr. Smith", rating: 4.5, comment: "Excellent quality, would recommend", date: "2024-03-15" }, // Use hospitalName
-      { hospitalName: "Dr. Johnson", rating: 5, comment: "Best in class, very reliable", date: "2024-03-14" }, // Use hospitalName
-      { hospitalName: "Dr. Williams", rating: 4, comment: "Good product, slight delay in delivery", date: "2024-03-13" } // Use hospitalName
-    ]
-  });
-
-  // Update localItem when item prop changes
-  useEffect(() => {
-    setLocalItem(item);
-  }, [item]);
-
-  const handleVendorSelect = (itemId: string, vendorName: string, vendor: Vendor) => {
-    if (!localItem) return;
-
-    // Update local state first
-    const updatedVendors = localItem.vendors.map(v => ({
-      ...v,
-      status: {
-        ...v.status,
-        isSelected: v.id === vendor.id ? !v.status.isSelected : v.status.isSelected
-      }
-    }));
-
-    setLocalItem({
-      ...localItem,
-      vendors: updatedVendors
-    });
-
-    // Update global state
-    setSelectedItems(prev => prev.map(item => {
-      if (item.id === itemId) {
-        return {
-          ...item,
-          vendors: updatedVendors,
-          ...(updatedVendors.find(v => v.id === vendor.id)?.status.isSelected ? {
-            selectedVendorIds: [...new Set([...(item.selectedVendorIds || []), vendor.id])],
-            selectedVendors: [...new Set([...(item.selectedVendors || []), vendor])]
-          } : {
-            selectedVendorIds: (item.selectedVendorIds || []).filter(id => id !== vendor.id),
-            selectedVendors: (item.selectedVendors || []).filter(v => v.id !== vendor.id)
-          })
-        };
-      }
-      return item;
-    }));
-
-    // Update the selectedVendors state
-    if (setSelectedVendors) {
-      setSelectedVendors(prev => {
-        const currentIds = prev[itemId] || [];
-        const isSelected = !currentIds.includes(vendor.id);
-        
-        return {
-          ...prev,
-          [itemId]: isSelected 
-            ? [...currentIds, vendor.id]
-            : currentIds.filter(id => id !== vendor.id)
-        };
-      });
-    }
-
-    // Update the selectedVendorActions state
-    if (setSelectedVendorActions) {
-      setSelectedVendorActions(prev => [
-        ...prev,
-        {
-          itemId,
-          vendorId: vendor.id,
-          vendor,
-          action: 'select'
-        }
-      ]);
-    }
-  };
-
-  // Generate fake historical data for the chart
-  const generateHistoricalData = (basePrice: number) => {
-    const months = 6;
-    const data: Array<{ date: string; price: number }> = [];
-    let currentPrice = basePrice;
-    
-    for (let i = months; i >= 0; i--) {
-      const date = new Date();
-      date.setMonth(date.getMonth() - i);
-      
-      // Add some random variation to the price
-      const variation = (Math.random() - 0.5) * 0.1 * basePrice;
-      currentPrice = basePrice + variation;
-      
-      data.push({
-        date: date.toLocaleDateString('en-US', { month: 'short' }),
-        price: Number(currentPrice.toFixed(2))
-      });
-    }
-    return data;
-  };
-
-  // Handle click outside and ESC key
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (overlayRef.current && !overlayRef.current.contains(event.target as Node)) {
-        onClose();
-      }
-    };
-
-    const handleEscKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('keydown', handleEscKey);
-      // Trigger chart animation when overlay opens
-      const timer = setTimeout(() => setChartVisible(true), 300);
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-        document.removeEventListener('keydown', handleEscKey);
-        clearTimeout(timer);
-      };
-    }
-    return undefined;
-  }, [isOpen, onClose]);
-
-  // Reset chart visibility when overlay closes
-  useEffect(() => {
-    if (!isOpen) {
-      setChartVisible(false);
-    }
-  }, [isOpen]);
-
-  if (!isOpen || !localItem) return null;
-
-  const baselinePrice = localItem.unitPrice;
-  const alternativePrices = alternativeVendors.map((v: Vendor) => v.pricePerUnit) || [];
-  const allPrices = [baselinePrice ?? 0, ...alternativePrices];
-  const minPrice = Math.min(...allPrices);
-  const maxPrice = Math.max(...allPrices);
-  const priceRange = maxPrice - minPrice;
-  const chartHeight = 120;
-
-  // Generate historical data for each vendor
-  const baselineHistory = baselinePrice ? generateHistoricalData(baselinePrice) : [];
-  const alternativeHistories = alternativePrices.map((price: number) => generateHistoricalData(price));
-
-  return (
-    <AnimatePresence>
-      {isOpen && localItem && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-50"
-            onClick={onClose}
-          />
-          
-          {/* Side Panel */}
-          <motion.div
-            ref={overlayRef}
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className="fixed inset-y-0 right-0 w-[calc(100%-32px)] max-w-[900px] bg-white shadow-lg z-50"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="h-full flex flex-col">
-              {/* Header */}
-              <div className="p-4 border-b">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm text-muted-foreground">Product Information</div> {/* Changed title */}
-                    <div className="text-lg font-semibold">{localItem.name}</div> {/* Show item name */} 
-                  </div>
-                  <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full">
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                {/* Tabs */}
-                <div className="mt-4">
-                  <nav className="flex space-x-8" aria-label="Order sections">
-                    <button
-                      onClick={() => setActiveTab("details")}
-                      className={`pb-4 px-1 border-b-2 font-medium text-sm ${
-                        activeTab === "details"
-                          ? "border-black text-black"
-                          : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                      }`}
-                    >
-                      Product Details {/* Changed tab name */}
-                    </button>
-                    <button
-                      onClick={() => setActiveTab("quotes")}
-                      className={`pb-4 px-1 border-b-2 font-medium text-sm ${
-                        activeTab === "quotes"
-                          ? "border-black text-black"
-                          : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                      }`}
-                    >
-                      Alternatives
-                    </button>
-                    {/* Removed History Tab Option */}
-                  </nav>
-                </div>
-              </div>
-              
-              {/* Scrollable Content */}
-              <div className="flex-1 overflow-y-auto">
-                <div className="p-6 space-y-6">
-                  {activeTab === "details" ? (
-                    <>
-                      {/* Item Overview Card */}
-                      <Card>
-                        <CardHeader>
-                          <div className="flex items-start gap-4">
-                            <div className="w-24 h-24 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
-                              <img
-                                src={localItem.image || `/placeholder.svg`}
-                                alt={localItem.name}
-                                className="max-w-full max-h-full object-contain"
-                              />
-                            </div>
-                            <div className="flex-1">
-                              <div className="font-medium text-lg">{localItem.name}</div>
-                              <div className="text-sm text-muted-foreground">SKU: {localItem.sku}</div>
-                              <div className="mt-2 flex items-center gap-2">
-                                <div className="flex items-center gap-1">
-                                  <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
-                                  <span className="text-sm">4.5 (24 reviews)</span>
-                                </div>
-                                {localItem.status === "Urgent" && (
-                                  <Badge variant="destructive" className="h-5 px-1.5 py-0 text-xs font-normal">Urgent</Badge>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-sm text-muted-foreground">{localItem.description}</div>
-                        </CardContent>
-                      </Card>
-
-                      {/* Product Specifications Card */}
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-lg">Product Specifications</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
-                            <div>
-                              <div className="text-muted-foreground mb-1">Manufacturer</div>
-                              <div className="font-medium">{localItem.manufacturer || '--'}</div> {/* Should exist on OrderItem now */}
-                            </div>
-                            <div>
-                              <div className="text-muted-foreground mb-1">Category</div>
-                              <div className="font-medium">{localItem.category || '--'}</div>
-                            </div>
-                            <div>
-                              <div className="text-muted-foreground mb-1">Status</div>
-                              <div className="font-medium">{localItem.status || '--'}</div>
-                            </div>
-                            <div>
-                              <div className="text-muted-foreground mb-1">Packaging</div>
-                              <div className="font-medium">{localItem.packaging || '--'}</div> {/* Property should now exist via extension */}
-                            </div>
-                            <div>
-                              <div className="text-muted-foreground mb-1">Current Stock</div>
-                              <div className="font-medium">{localItem.currentStock ?? 0} / {localItem.totalStock ?? 0}</div> {/* Use ?? and check existence */}
-                            </div>
-                            <div>
-                              <div className="text-muted-foreground mb-1">Expires In</div>
-                              <div className="font-medium">{localItem.expiresIn || '--'}</div> {/* Property should now exist */}
-                            </div>
-                            <div>
-                              <div className="text-muted-foreground mb-1">Last Purchase Price</div>
-                              <div className="font-medium">${localItem.lastPurchasePrice?.toFixed(2) || '--'}</div> {/* Property should now exist */}
-                            </div>
-                            <div>
-                              <div className="text-muted-foreground mb-1">Current Unit Price</div>
-                              <div className="font-medium">${localItem.unitPrice?.toFixed(2) || '--'}</div> {/* Added optional chaining */}
-                            </div>
-                            <div>
-                              <div className="text-muted-foreground mb-1">Required Units</div>
-                              <div className="font-medium">{localItem.requiredUnits || '--'}</div> {/* Property should now exist */}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      {/* Transaction History Card */}
-                      <Card>
-                        <CardHeader 
-                          className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => setExpandedItems(prev => ({ ...prev, [localItem.id]: !prev[localItem.id] }))}
-                        >
-                          <div className="flex items-center justify-between">
-                            <CardTitle className="text-lg">Transaction History</CardTitle>
-                            <Button variant="ghost" size="icon">
-                              {expandedItems[localItem.id] ? (
-                                <ChevronDown className="h-4 w-4" />
-                              ) : (
-                                <ChevronRight className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </div>
-                        </CardHeader>
-                        {expandedItems[localItem.id] && (
-                          <CardContent>
-                            <div className="space-y-4">
-                              {ordersData
-                                .filter((order: Order) => 
-                                  order.items?.some((orderItem: { name: string }) => 
-                                    orderItem.name === localItem.name
-                                  )
-                                )
-                                .map((order: Order) => {
-                                  const orderItem = order.items?.find((i: { name: string }) => i.name === localItem.name);
-                                  return (
-                                    <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg">
-                                      <div className="space-y-1">
-                                        <div className="font-medium">{order.id}</div>
-                                        <div className="text-sm text-muted-foreground">{order.date}</div>
-                                        <div className="text-sm">Department: {order.department}</div>
-                                      </div>
-                                      <div className="text-right space-y-1">
-                                        <div className="font-medium">{orderItem?.quantity} units</div>
-                                        <div className="text-sm text-muted-foreground">${orderItem?.price.toFixed(2)} per unit</div>
-                                        <Badge 
-                                          variant={
-                                            order.status === "Completed" ? "default" :
-                                            order.status === "Processing" ? "secondary" :
-                                            order.status === "Cancelled" ? "destructive" :
-                                            "outline"
-                                          }
-                                        >
-                                          {order.status}
-                                        </Badge>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                            </div>
-                          </CardContent>
-                        )}
-                      </Card>
-
-                      {/* Feedback Card */}
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-lg">Recent Feedback</CardTitle>
-                          <CardDescription>Last 3 reviews from healthcare professionals</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-4">
-                            {productFeedback['default-feedback'].map((feedback: Feedback, index: number) => (
-                              <div key={index} className="border-b pb-4 last:border-b-0 last:pb-0">
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-sm font-medium">{feedback.hospitalName}</span>
-                                  <div className="flex items-center gap-1">
-                                    <Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
-                                    <span className="text-xs">{feedback.rating}</span>
-                                  </div>
-                                </div>
-                                <p className="text-sm text-muted-foreground">{feedback.comment}</p>
-                                <span className="text-xs text-muted-foreground">{feedback.date}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </>
-                  ) : activeTab === "quotes" ? (
-                    <div className="space-y-4">
-                      <div className="flex flex-col gap-4">
-                        {localItem.vendors.map((vendor) => {
-                          const isCurrentVendor = vendor.status.isCurrentVendor;
-                          const isSelected = vendor.status.isSelected;
-                          
-                          return (
-                            <div
-                              key={vendor.id}
-                              className={cn(
-                                "relative rounded-lg border p-4",
-                                isCurrentVendor
-                                  ? "border-blue-200 bg-blue-50"
-                                  : isSelected
-                                  ? "border-primary bg-primary/5"
-                                  : "border-border hover:border-primary"
-                              )}
-                            >
-                              <div className="flex items-start gap-4">
-                                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border">
-                                  {vendor.image_url ? (
-                                    <Image
-                                      src={vendor.image_url}
-                                      alt={vendor.name}
-                                      className="object-contain"
-                                      fill
-                                    />
-                                  ) : (
-                                    <div className="flex h-full w-full items-center justify-center bg-muted">
-                                      <Building2 className="h-8 w-8 text-muted-foreground" />
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="flex-1 space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex flex-col">
-                                      <div className="flex items-center gap-2">
-                                        <h4 className="font-medium">{vendor.name}</h4>
-                                        {vendor.compliance === "Hospital Approved" && (
-                                          <Badge variant="secondary" className="bg-green-100 text-green-800">
-                                            Hospital Approved
-                                          </Badge>
-                                        )}
-                                        {vendor.status.isCurrentVendor && (
-                                          <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                                            Current Vendor
-                                          </Badge>
-                                        )}
-                                      </div>
-                                      {/* Display product name */}
-                                      <p className="text-sm text-muted-foreground">Product: {localItem.name}</p>
-                                    </div>
-                                    <div className="text-right">
-                                      <div className="font-medium text-lg">${vendor.pricePerUnit?.toFixed(2)}</div>
-                                      {vendor.savings !== null && vendor.savings !== undefined && vendor.savings > 0 && ( // Check undefined as well
-                                        <div className="text-sm text-green-600">Save ${vendor.savings.toFixed(2)}</div> // Savings is checked now
-                                      )}
-                                    </div>
-                                  </div>
-                                  
-                                  <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground">
-                                    <div className="space-y-1">
-                                      <div className="flex items-center gap-1">
-                                        <Package className="h-4 w-4" />
-                                        <span>Manufacturer: {vendor.manufacturer}</span>
-                                      </div>
-                                      <div className="flex items-center gap-1">
-                                        <Truck className="h-4 w-4" />
-                                        <span>Delivery: {vendor.delivery}</span>
-                                      </div>
-                                      <div className="flex items-center gap-1">
-                                        <ShieldCheck className="h-4 w-4" />
-                                        <span>Compliance: {vendor.compliance}</span>
-                                      </div>
-                                    </div>
-                                    <div className="space-y-1">
-                                      <div className="flex items-center gap-1">
-                                        <Clock className="h-4 w-4" />
-                                        <span>Shipping: {vendor.shipping}</span>
-                                      </div>
-                                      <div className="flex items-center gap-1">
-                                        <Box className="h-4 w-4" />
-                                        <span className="font-medium">Packaging: {vendor.packaging}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Hospital Usage Section */}
-                                  {(vendor.notes?.hospitalUsage || vendor.notes?.recentPurchases) && (
-                                    <div className="mt-3 p-3 bg-blue-50 rounded-lg space-y-2">
-                                      <h5 className="font-medium text-blue-900 flex items-center gap-2">
-                                        <Building2 className="h-4 w-4" />
-                                        Hospital Usage
-                                      </h5>
-                                      {vendor.notes.hospitalUsage && (
-                                        <p className="text-sm text-blue-700">
-                                          <Users className="h-4 w-4 inline mr-2" />
-                                          {vendor.notes.hospitalUsage}
-                                        </p>
-                                      )}
-                                      {vendor.notes.recentPurchases && (
-                                        <p className="text-sm text-blue-700">
-                                          <History className="h-4 w-4 inline mr-2" />
-                                          {vendor.notes.recentPurchases}
-                                        </p>
-                                      )}
-                                    </div>
-                                  )}
-
-                                  {/* Feedback Section */}
-                                  {vendor.feedback && vendor.feedback.length > 0 && (
-                                    <div className="mt-3 border-t pt-3">
-                                      <h5 className="font-medium mb-2 flex items-center gap-2">
-                                        <MessageSquare className="h-4 w-4" />
-                                        Recent Feedback
-                                      </h5>
-                                      <div className="space-y-2">
-                                        {vendor.feedback.map((feedback, index) => (
-                                          <div key={index} className="bg-muted/50 rounded-lg p-2 text-sm">
-                                            <div className="flex items-center justify-between mb-1">
-                                              <span className="font-medium">{feedback.hospitalName}</span> {/* Changed to hospitalName (matches updated type) */}
-                                              <div className="flex items-center gap-1">
-                                                {renderStars(feedback.rating)}
-                                                <span className="text-xs ml-1">{feedback.rating}</span>
-                                              </div>
-                                            </div>
-                                            <p className="text-muted-foreground">{feedback.comment}</p>
-                                            <span className="text-xs text-muted-foreground">{feedback.date}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  <div className="flex items-center gap-2 pt-2">
-                                    <Button
-                                      variant={vendor.status.isSelected ? "default" : "outline"}
-                                      size="sm"
-                                      className="gap-2"
-                                      onClick={() => handleVendorSelect(localItem.id, vendor.name, vendor)}
-                                    >
-                                      {vendor.status.isSelected ? (
-                                        <>
-                                          <CheckCircle className="h-4 w-4" />
-                                          Selected
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Plus className="h-4 w-4" />
-                                          Select
-                                        </>
-                                      )}
-                                    </Button>
-                                    {vendor.url && (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="gap-2"
-                                        onClick={() => window.open(vendor.url, '_blank')}
-                                      >
-                                        <ExternalLink className="h-4 w-4" />
-                                        Website
-                                      </Button>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* New Supply Exchange Card */}
-                      <Card className="mt-6">
-                        <CardHeader>
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <CardTitle className="text-lg flex items-center gap-2">
-                                <RefreshCw className="h-5 w-5 text-blue-500" />
-                                Supply Exchange
-                              </CardTitle>
-                              <CardDescription>
-                                Publish your request to the internal supply exchange network
-                              </CardDescription>
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-4">
-                            <div className="flex items-start gap-4 p-4 bg-blue-50 rounded-lg">
-                              <div className="p-2 rounded-full bg-blue-100">
-                                <MessageSquareText className="h-5 w-5 text-blue-600" />
-                              </div>
-                              <div className="flex-1">
-                                <h4 className="font-medium text-blue-900">Why publish to Supply Exchange?</h4>
-                                <p className="text-sm text-blue-700 mt-1">
-                                  Publishing your request allows other departments and facilities in your network to:
-                                </p>
-                                <ul className="mt-2 space-y-1 text-sm text-blue-700">
-                                  <li className="flex items-center gap-2">
-                                    <CheckCircle2 className="h-4 w-4 text-blue-500" />
-                                    Share surplus inventory
-                                  </li>
-                                  <li className="flex items-center gap-2">
-                                    <CheckCircle2 className="h-4 w-4 text-blue-500" />
-                                    Combine orders for better pricing
-                                  </li>
-                                  <li className="flex items-center gap-2">
-                                    <CheckCircle2 className="h-4 w-4 text-blue-500" />
-                                    Access pre-negotiated contracts
-                                  </li>
-                                </ul>
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <div className="text-sm text-muted-foreground">
-                                Your request will be visible to all members of your healthcare network
-                              </div>
-                              <Button className="gap-2">
-                                <RefreshCw className="h-4 w-4" />
-                                Publish Request
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {/* Fallback or other tabs if needed */}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  );
-};
-
-// --- New Budget Summary Interface ---
-interface BudgetSummaryProps {
-  allocatedBudget: number;
-  currentTotal: number;
-}
-
-// --- New Combine Order Interface ---
-interface CombineOrderProps {
-  fillPercentage: number; // Percentage of truck capacity filled
-}
-
-// --- New Budget Summary Card Component ---
-const BudgetSummaryCard: React.FC<BudgetSummaryProps> = ({ allocatedBudget, currentTotal }) => {
-  const remainingBudget = allocatedBudget - currentTotal;
-  const usagePercentage = allocatedBudget > 0 ? (currentTotal / allocatedBudget) * 100 : 0;
-
-  let progressBarColor = "bg-blue-500";
-  let statusText = "Within Budget";
-  let statusColor = "text-green-600";
-  let icon = <CheckCircle2 className="h-5 w-5" />;
-
-  if (usagePercentage > 100) {
-    progressBarColor = "bg-red-500";
-    statusText = "Over Budget";
-    statusColor = "text-red-600";
-    icon = <AlertTriangle className="h-5 w-5" />;
-  } else if (usagePercentage > 85) {
-    progressBarColor = "bg-yellow-500";
-    statusText = "Nearing Budget Limit";
-    statusColor = "text-yellow-600";
-    icon = <AlertTriangle className="h-5 w-5" />;
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Budget Overview</CardTitle>
-        <CardDescription>Current order impact on allocated funds.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex justify-between text-sm">
-          <span>Allocated:</span>
-          <span className="font-medium">${allocatedBudget.toLocaleString()}</span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span>Current Order:</span>
-          <span className="font-medium">${currentTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-        </div>
-        <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
-          <div
-            className={`h-full ${progressBarColor}`}
-            style={{ width: `${Math.min(usagePercentage, 100)}%` }} // Cap at 100% for visual
-          />
-        </div>
-        <div className={`flex items-center justify-between text-sm font-medium ${statusColor}`}>
-          <span>{statusText}</span>
-          <div className="flex items-center gap-1">
-            {icon}
-            <span>
-              {remainingBudget >= 0
-                ? `$${remainingBudget.toLocaleString()} remaining`
-                : `$${Math.abs(remainingBudget).toLocaleString()} over`}
-            </span>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+// Add a mapping of random default specifications for some items
+const defaultSpecifications: { [key: string]: string } = {
+  'item-1': 'Must be compliant with ASTM D3578 and EN 455 standards',
+  'item-2': 'Safety-engineered feature to prevent needlestick injuries, sterile, individually packaged',
+  'item-3': 'ASTM F2100 Level 3, with ear loops, >98% bacterial filtration efficiency',
+  'item-4': 'Latex-free, powder-free, textured fingertips for enhanced grip',
+  'item-5': 'Disposable, non-sterile, ambidextrous, beaded cuff',
 };
 
 export default function CreateOrderPage() {
@@ -1090,6 +367,9 @@ export default function CreateOrderPage() {
   const [selectedPaymentTerms, setSelectedPaymentTerms] = useState<string>("Net 30")
   const [selectedDeliveryTime, setSelectedDeliveryTime] = useState<string>("3-5 days")
   const [showFilters, setShowFilters] = useState(false)
+  const [issueDate, setIssueDate] = useState<string>(new Date().toISOString().split('T')[0])
+  const [dueDate, setDueDate] = useState<string>("")
+  const [orderDescription, setOrderDescription] = useState<string>("")
   const filtersRef = useRef<HTMLDivElement>(null)
   const [selectedVendorActions, setSelectedVendorActions] = useState<SelectedVendorAction[]>([])
   const [rfqItems, setRfqItems] = useState<RfqItem[]>([])
@@ -1106,12 +386,37 @@ export default function CreateOrderPage() {
   const [loadingAISuggestions, setLoadingAISuggestions] = useState(false)
   const [showRfqDialog, setShowRfqDialog] = useState(false)
   const [isGeneratingRfq, setIsGeneratingRfq] = useState(false)
+  // Add these state variables near the top with other state declarations
+  const [selectedUnits, setSelectedUnits] = useState<{ [key: string]: string }>({})
+  const [specifications, setSpecifications] = useState<{ [key: string]: string }>({})
+  const [expandedAIInsights, setExpandedAIInsights] = useState(false); // Initialize as collapsed
+  const [selectedDepartment, setSelectedDepartment] = useState("surgery")
+  const [expandedBudget, setExpandedBudget] = useState(false); // Add this state for budget expansion
+  // Add a new state for tracking item departments
+  const [itemDepartments, setItemDepartments] = useState<{ [key: string]: string }>({})
+
+  // Add department options
+  const departmentOptions = [
+    "Cardiology",
+    "Emergency",
+    "Laboratory",
+    "Neurology",
+    "Oncology",
+    "Orthopedics",
+    "Pediatrics",
+    "Radiology",
+    "Surgery",
+    "General"
+  ]
+
+  // Add these constants for the unit options
+  const unitOptions = ["pieces", "pairs", "boxes", "sets", "kits", "units", "meters", "liters", "kilograms"]
 
   // Payment terms options
-  const paymentTermsOptions = ["Net 30", "Net 45", "Net 60"]
+  const paymentTermsOptions = ["Net 30", "Net 45", "Net 60", "Net 90", "Due on Receipt"]
   
   // Delivery time options
-  const deliveryTimeOptions = ["2-3 days", "3-5 days", "5-7 days"]
+  const deliveryTimeOptions = ["1-2 days", "2-3 days", "3-5 days", "5-7 days", "7-10 days", "10-14 days"]
 
   const filteredItems = inventoryData.filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
 
@@ -1166,6 +471,11 @@ export default function CreateOrderPage() {
       };
       setSelectedItems((prevItems) => [...prevItems, newItem]);
       setSearchQuery("");
+      // Prefill specifications if available
+      setSpecifications(prev => ({
+        ...prev,
+        [item.id]: defaultSpecifications[item.id] || ""
+      }));
     }
   };
 
@@ -1632,9 +942,8 @@ export default function CreateOrderPage() {
         ...prev,
         {
           itemId,
-          vendorId: vendor.id,
           vendor,
-          action: 'select'
+          action: 'add'
         }
       ]);
     }
@@ -1759,10 +1068,6 @@ export default function CreateOrderPage() {
               <Card>
                 <CardContent className="space-y-6">
                   <div className="flex gap-2 mt-4">
-                      <Button variant="outline" className="h-12 gap-2">
-                        <BookOpen className="h-4 w-4" />
-                        Catalogue
-                      </Button>
                     <div className="relative flex-1">
                       <Search className="absolute left-4 top-4 h-5 w-5 text-muted-foreground" />
                       <Input
@@ -1847,22 +1152,7 @@ export default function CreateOrderPage() {
                   <Card>
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle>Selected Items</CardTitle>
-                          <CardDescription>Items added to your order</CardDescription>
-                        </div>
                         <div className="flex items-center gap-2">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="outline" size="sm" className="gap-2">
-                                <Filter className="h-4 w-4" />
-                                Filter
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              {/* Add filter options here */}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="outline" size="sm" className="gap-2">
@@ -1883,20 +1173,21 @@ export default function CreateOrderPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="relative w-full overflow-auto">
-                        <div className="w-[1400px] min-w-full">
-                          <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-white via-white/80 to-transparent pointer-events-none z-10"></div> {/* Increased width from w-8 to w-16 and enhanced gradient */}
+                        <div className="w-[2000px] min-w-full">
+                          {/* <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-white via-white/80 to-transparent pointer-events-none z-20"></div> */}
                         <Table>
                           <TableHeader>
                             <TableRow>
                               <TableHead className="w-[400px]">Product Details</TableHead>
                               <TableHead className="w-[140px]">SKU</TableHead>
-                                <TableHead className="w-[200px]">Vendor</TableHead> {/* Reduced from 250px */}
-                              <TableHead className="w-[120px] text-center">Review</TableHead>
-                              <TableHead className="w-[120px] text-right">Unit Price</TableHead>
+                              <TableHead className="w-[200px]">Vendor</TableHead>
+                              <TableHead className="w-[120px] text-center">Hospital Feedback</TableHead>
                               <TableHead className="w-[100px] text-center">Quantity</TableHead>
-                              <TableHead className="w-[120px] text-right">Total</TableHead>
+                              <TableHead className="w-[100px]">Unit</TableHead>
+                              <TableHead className="w-[150px]">Department</TableHead>
+                              <TableHead className="w-[200px]">Specifications</TableHead>
                               <TableHead className="w-[150px]">Payment Terms</TableHead>
-                              <TableHead className="w-[150px]">Delivery Terms</TableHead>
+                              <TableHead className="w-[150px]">Delivery</TableHead>
                               <TableHead className="w-[40px]">Actions</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -2035,9 +1326,6 @@ export default function CreateOrderPage() {
                                               <span className="text-sm text-muted-foreground">4.5 (24)</span>
                                             </div>
                                           </TableCell>
-                                          <TableCell className="text-right">
-                                            ${item.unitPrice?.toFixed(2) ?? '0.00'} {/* Use optional chaining */}
-                                          </TableCell>
                                           <TableCell>
                                             <Input
                                               type="number"
@@ -2048,14 +1336,97 @@ export default function CreateOrderPage() {
                                                 updateItemQuantity(item.id, Math.max(1, parseInt(e.target.value) || 1));
                                               }}
                                               onClick={(e) => e.stopPropagation()}
-                                              className="h-7 w-14 text-center"
+                                              className="h-7 w-24 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                             />
                                           </TableCell>
-                                          <TableCell className="text-right">
-                                            ${((item.quantity || 1) * (item.unitPrice ?? 0)).toFixed(2)} {/* Handle undefined unitPrice */}
+                                          <TableCell>
+                                            <DropdownMenu>
+                                              <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="sm" className="w-full justify-start">
+                                                  {selectedUnits[item.id] || "Select unit"}
+                                                </Button>
+                                              </DropdownMenuTrigger>
+                                              <DropdownMenuContent align="end">
+                                                <DropdownMenuRadioGroup 
+                                                  value={selectedUnits[item.id] || ""} 
+                                                  onValueChange={(value) => setSelectedUnits(prev => ({ ...prev, [item.id]: value }))}
+                                                >
+                                                  {unitOptions.map((option) => (
+                                                    <DropdownMenuRadioItem key={option} value={option}>
+                                                      {option}
+                                                    </DropdownMenuRadioItem>
+                                                  ))}
+                                                </DropdownMenuRadioGroup>
+                                              </DropdownMenuContent>
+                                            </DropdownMenu>
                                           </TableCell>
-                                          <TableCell>{selectedPaymentTerms}</TableCell>
-                                          <TableCell>{selectedDeliveryTime}</TableCell>
+                                          <TableCell>
+                                            <DropdownMenu>
+                                              <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="sm" className="w-full justify-start">
+                                                  {itemDepartments[item.id] || "Select department"}
+                                                </Button>
+                                              </DropdownMenuTrigger>
+                                              <DropdownMenuContent align="end">
+                                                <DropdownMenuRadioGroup 
+                                                  value={itemDepartments[item.id] || ""} 
+                                                  onValueChange={(value) => setItemDepartments(prev => ({ ...prev, [item.id]: value }))}
+                                                >
+                                                  {departmentOptions.map((option) => (
+                                                    <DropdownMenuRadioItem key={option} value={option}>
+                                                      {option}
+                                                    </DropdownMenuRadioItem>
+                                                  ))}
+                                                </DropdownMenuRadioGroup>
+                                              </DropdownMenuContent>
+                                            </DropdownMenu>
+                                          </TableCell>
+                                          <TableCell>
+                                            <Input
+                                              type="text"
+                                              placeholder="Enter specifications..."
+                                              value={specifications[item.id] || ""}
+                                              onChange={(e) => setSpecifications(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                              className="h-8 text-sm"
+                                              onClick={(e) => e.stopPropagation()}
+                                            />
+                                          </TableCell>
+                                          <TableCell>
+                                            <DropdownMenu>
+                                              <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="sm" className="w-full justify-start">
+                                                  {selectedPaymentTerms}
+                                                </Button>
+                                              </DropdownMenuTrigger>
+                                              <DropdownMenuContent align="end">
+                                                <DropdownMenuRadioGroup value={selectedPaymentTerms} onValueChange={setSelectedPaymentTerms}>
+                                                  {paymentTermsOptions.map((option) => (
+                                                    <DropdownMenuRadioItem key={option} value={option}>
+                                                      {option}
+                                                    </DropdownMenuRadioItem>
+                                                  ))}
+                                                </DropdownMenuRadioGroup>
+                                              </DropdownMenuContent>
+                                            </DropdownMenu>
+                                          </TableCell>
+                                          <TableCell>
+                                            <DropdownMenu>
+                                              <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="sm" className="w-full justify-start">
+                                                  {selectedDeliveryTime}
+                                                </Button>
+                                              </DropdownMenuTrigger>
+                                              <DropdownMenuContent align="end">
+                                                <DropdownMenuRadioGroup value={selectedDeliveryTime} onValueChange={setSelectedDeliveryTime}>
+                                                  {deliveryTimeOptions.map((option) => (
+                                                    <DropdownMenuRadioItem key={option} value={option}>
+                                                      {option}
+                                                    </DropdownMenuRadioItem>
+                                                  ))}
+                                                </DropdownMenuRadioGroup>
+                                              </DropdownMenuContent>
+                                            </DropdownMenu>
+                                          </TableCell>
                                           <TableCell>
                                             <Button
                                               variant="ghost"
@@ -2183,9 +1554,6 @@ export default function CreateOrderPage() {
                                         <span className="text-sm text-muted-foreground">4.5 (24)</span>
                                       </div>
                                     </TableCell>
-                                    <TableCell className="text-right">
-                                      ${item.unitPrice?.toFixed(2) ?? '0.00'} {/* Use optional chaining */}
-                                    </TableCell>
                                     <TableCell>
                                       <Input
                                         type="number"
@@ -2196,14 +1564,97 @@ export default function CreateOrderPage() {
                                           updateItemQuantity(item.id, Math.max(1, parseInt(e.target.value) || 1));
                                         }}
                                         onClick={(e) => e.stopPropagation()}
-                                        className="h-7 w-14 text-center"
+                                        className="h-7 w-24 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                       />
                                     </TableCell>
-                                    <TableCell className="text-right">
-                                      ${((item.quantity || 1) * (item.unitPrice ?? 0)).toFixed(2)} {/* Handle undefined unitPrice */}
+                                    <TableCell>
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button variant="ghost" size="sm" className="w-full justify-start">
+                                            {selectedUnits[item.id] || "Select unit"}
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                          <DropdownMenuRadioGroup 
+                                            value={selectedUnits[item.id] || ""} 
+                                            onValueChange={(value) => setSelectedUnits(prev => ({ ...prev, [item.id]: value }))}
+                                          >
+                                            {unitOptions.map((option) => (
+                                              <DropdownMenuRadioItem key={option} value={option}>
+                                                {option}
+                                              </DropdownMenuRadioItem>
+                                            ))}
+                                          </DropdownMenuRadioGroup>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
                                     </TableCell>
-                                    <TableCell>{selectedPaymentTerms}</TableCell>
-                                    <TableCell>{selectedDeliveryTime}</TableCell>
+                                    <TableCell>
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button variant="ghost" size="sm" className="w-full justify-start">
+                                            {itemDepartments[item.id] || "Select department"}
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                          <DropdownMenuRadioGroup 
+                                            value={itemDepartments[item.id] || ""} 
+                                            onValueChange={(value) => setItemDepartments(prev => ({ ...prev, [item.id]: value }))}
+                                          >
+                                            {departmentOptions.map((option) => (
+                                              <DropdownMenuRadioItem key={option} value={option}>
+                                                {option}
+                                              </DropdownMenuRadioItem>
+                                            ))}
+                                          </DropdownMenuRadioGroup>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Input
+                                        type="text"
+                                        placeholder="Enter specifications..."
+                                        value={specifications[item.id] || ""}
+                                        onChange={(e) => setSpecifications(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                        className="h-8 text-sm"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                    </TableCell>
+                                    <TableCell>
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button variant="ghost" size="sm" className="w-full justify-start">
+                                            {selectedPaymentTerms}
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                          <DropdownMenuRadioGroup value={selectedPaymentTerms} onValueChange={setSelectedPaymentTerms}>
+                                            {paymentTermsOptions.map((option) => (
+                                              <DropdownMenuRadioItem key={option} value={option}>
+                                                {option}
+                                              </DropdownMenuRadioItem>
+                                            ))}
+                                          </DropdownMenuRadioGroup>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </TableCell>
+                                    <TableCell>
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button variant="ghost" size="sm" className="w-full justify-start">
+                                            {selectedDeliveryTime}
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                          <DropdownMenuRadioGroup value={selectedDeliveryTime} onValueChange={setSelectedDeliveryTime}>
+                                            {deliveryTimeOptions.map((option) => (
+                                              <DropdownMenuRadioItem key={option} value={option}>
+                                                {option}
+                                              </DropdownMenuRadioItem>
+                                            ))}
+                                          </DropdownMenuRadioGroup>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </TableCell>
                                     <TableCell>
                                       <Button
                                         variant="ghost"
@@ -2237,6 +1688,729 @@ export default function CreateOrderPage() {
                     </CardContent>
                   </Card>
                 )}
+
+                {/* Order Summary, Budget, Combine Order, and AI Insights Sections */}
+                {selectedItems.length > 0 && (
+                  <div className="space-y-4">
+                    {/* Budget and Combine Order in a two-column layout */}
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Budget Section */}
+                      <Card className="overflow-hidden">
+                        <CardHeader className="border-b py-3 px-4 flex flex-row items-center justify-between" 
+                          onClick={() => setExpandedBudget(!expandedBudget)}
+                          style={{ cursor: 'pointer' }}>
+                          <div className="flex items-center gap-2">
+                            <DollarSign className="h-4 w-4 text-muted-foreground" />
+                            <CardTitle className="text-base font-medium">Budget</CardTitle>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {/* Always visible budget summary */}
+                            <div className="flex items-center gap-1 mr-2">
+                              <span className="text-xs font-medium">
+                                {selectedDepartment === "surgery" && (
+                                  calculateTotal() > 10000 ? 
+                                  <Badge variant="destructive" className="text-xs">Exceeds Limit</Badge> : 
+                                  <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">Within Budget</Badge>
+                                )}
+                                {selectedDepartment === "emergency" && (
+                                  calculateTotal() > 15000 ? 
+                                  <Badge variant="destructive" className="text-xs">Exceeds Limit</Badge> : 
+                                  <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">Within Budget</Badge>
+                                )}
+                              </span>
+                          </div>
+                          <Badge variant="outline" className="text-xs font-normal">Q1 2024</Badge>
+                            <ChevronDown className={`h-4 w-4 transition-transform ${expandedBudget ? 'rotate-180' : ''}`} />
+                          </div>
+                        </CardHeader>
+                        
+                        {expandedBudget && (
+                        <CardContent className="p-4 space-y-6">
+                            {/* Department Budget Section */}
+                            <div className="space-y-3">
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Department</span>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm" className="h-7">
+                                      {selectedDepartment === "surgery" && "Surgery"}
+                                      {selectedDepartment === "emergency" && "Emergency"}
+                                      {selectedDepartment === "cardiology" && "Cardiology"}
+                                      {selectedDepartment === "radiology" && "Radiology"}
+                                      {selectedDepartment === "neurology" && "Neurology"}
+                                      {selectedDepartment === "pediatrics" && "Pediatrics"}
+                                      {selectedDepartment === "laboratory" && "Laboratory"}
+                                      {selectedDepartment === "it" && "IT Department"}
+                                      {selectedDepartment === "general" && "General Supplies"}
+                                      <ChevronDown className="ml-2 h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent>
+                                    <DropdownMenuRadioGroup value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                                      <DropdownMenuRadioItem value="surgery">Surgery</DropdownMenuRadioItem>
+                                      <DropdownMenuRadioItem value="emergency">Emergency</DropdownMenuRadioItem>
+                                      <DropdownMenuRadioItem value="cardiology">Cardiology</DropdownMenuRadioItem>
+                                      <DropdownMenuRadioItem value="radiology">Radiology</DropdownMenuRadioItem>
+                                      <DropdownMenuRadioItem value="neurology">Neurology</DropdownMenuRadioItem>
+                                      <DropdownMenuRadioItem value="pediatrics">Pediatrics</DropdownMenuRadioItem>
+                                      <DropdownMenuRadioItem value="laboratory">Laboratory</DropdownMenuRadioItem>
+                                      <DropdownMenuRadioItem value="it">IT Department</DropdownMenuRadioItem>
+                                      <DropdownMenuRadioItem value="general">General Supplies</DropdownMenuRadioItem>
+                                    </DropdownMenuRadioGroup>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </div>
+
+                          {/* Available Budget */}
+                          <div className="space-y-3">
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Annual Budget</span>
+                                <span className="text-sm font-medium">
+                                  ${selectedDepartment === "surgery" ? "275,000" : 
+                                     selectedDepartment === "emergency" ? "320,000" : "150,000"}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Q1 Budget</span>
+                                <span className="text-sm font-medium">
+                                  ${selectedDepartment === "surgery" ? "75,000" : 
+                                     selectedDepartment === "emergency" ? "85,000" : "40,000"}
+                                </span>
+                              </div>
+                              {/* <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Already Spent</span>
+                                <span className="text-sm font-medium">
+                                  ${selectedDepartment === "surgery" ? "35,000" : 
+                                     selectedDepartment === "emergency" ? "42,000" : "17,500"}
+                                </span>
+                              </div> */}
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-muted-foreground">Available Budget</span>
+                                <span className="text-sm font-medium">
+                                  ${selectedDepartment === "surgery" ? "40,000" : 
+                                     selectedDepartment === "emergency" ? "43,000" : "22,500"}
+                                </span>
+                            </div>
+                            <div className="relative w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="absolute inset-0 w-full h-full">
+                                <div 
+                                  className="h-full bg-black rounded-full"
+                                    style={{ width: selectedDepartment === "surgery" ? '46.6%' : 
+                                                   selectedDepartment === "emergency" ? '49.4%' : '43.8%' }}
+                                >
+                                  <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-white font-medium">
+                                      {selectedDepartment === "surgery" ? '46.6%' : 
+                                       selectedDepartment === "emergency" ? '49.4%' : '43.8%'} Used
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                                <span>Spent: ${selectedDepartment === "surgery" ? "35,000" : 
+                                              selectedDepartment === "emergency" ? "42,000" : "17,500"}</span>
+                                <span>Total: ${selectedDepartment === "surgery" ? "75,000" : 
+                                              selectedDepartment === "emergency" ? "85,000" : "40,000"}</span>
+                            </div>
+                          </div>
+
+                          {/* This Order */}
+                          <div className="space-y-3">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-muted-foreground">This Order</span>
+                                <span className="text-sm font-medium">$~10000</span>
+                            </div>
+                            <div className="relative w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div 
+                                  className={`h-full rounded-full ${
+                                    selectedDepartment === "surgery" && calculateTotal() > 10000 ? "bg-red-500" :
+                                    selectedDepartment === "emergency" && calculateTotal() > 15000 ? "bg-red-500" :
+                                    "bg-blue-500"
+                                  }`}
+                                  style={{ width: `${Math.min(100, (calculateTotal() / (selectedDepartment === "surgery" ? 75000 : selectedDepartment === "emergency" ? 85000 : 40000)) * 100)}%` }}
+                              >
+                                <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-white font-medium">
+                                    {((calculateTotal() / (selectedDepartment === "surgery" ? 75000 : selectedDepartment === "emergency" ? 85000 : 40000)) * 100).toFixed(1)}% of Budget
+                                </span>
+                              </div>
+                            </div>
+                            </div>
+
+                            {/* Budget Forecast */}
+                            <div className="space-y-3">
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium">Budget Forecast</span>
+                                <span className="text-xs text-muted-foreground">After this order</span>
+                          </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Remaining Q1 Budget</span>
+                                <span className="text-sm font-medium">
+                                  ${(
+                                    (selectedDepartment === "surgery" ? 40000 : 
+                                    selectedDepartment === "emergency" ? 43000 : 22500) - calculateTotal()
+                                  ).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-muted-foreground">Q1 Budget Status</span>
+                                <div>
+                                  {selectedDepartment === "surgery" && calculateTotal() > 10000 ? (
+                                    <Badge variant="destructive">Requires Approval</Badge>
+                                  ) : selectedDepartment === "emergency" && calculateTotal() > 15000 ? (
+                                    <Badge variant="destructive">Requires Approval</Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                      Within Limits
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                              {(selectedDepartment === "surgery" && calculateTotal() > 10000) || 
+                               (selectedDepartment === "emergency" && calculateTotal() > 15000) ? (
+                                <div className="bg-amber-50 p-3 rounded-md border border-amber-200">
+                                  <div className="flex items-start gap-2">
+                                    <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5" />
+                                    <div>
+                                      <p className="text-sm font-medium text-amber-800">Approval Required</p>
+                                      <p className="text-xs text-amber-700 mt-1">
+                                        This order exceeds the departmental single-order limit of ${selectedDepartment === "surgery" ? "10,000" : "15,000"}.
+                                        Additional approval from the {selectedDepartment === "surgery" ? "Surgical" : "Emergency"} Department Head is required.
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : null}
+                              
+                              {/* Projected Spend Chart */}
+                              <div className="pt-2">
+                                <div className="text-xs font-medium text-muted-foreground pb-2">Projected Q1 Spend</div>
+                                <div className="w-full h-8 bg-gray-100 rounded overflow-hidden relative">
+                                  {/* Already spent */}
+                                  <div 
+                                    className="absolute h-full bg-gray-600" 
+                                    style={{ 
+                                      width: `${(selectedDepartment === "surgery" ? 35000 : 
+                                              selectedDepartment === "emergency" ? 42000 : 17500) / 
+                                             (selectedDepartment === "surgery" ? 75000 : 
+                                              selectedDepartment === "emergency" ? 85000 : 40000) * 100}%` 
+                                    }}
+                                  >
+                                    <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-[10px] text-white font-medium">
+                                      Spent
+                                    </span>
+                                  </div>
+                                  {/* This order */}
+                                  <div 
+                                    className="absolute h-full bg-blue-500" 
+                                    style={{ 
+                                      left: `${(selectedDepartment === "surgery" ? 35000 : 
+                                              selectedDepartment === "emergency" ? 42000 : 17500) / 
+                                             (selectedDepartment === "surgery" ? 75000 : 
+                                              selectedDepartment === "emergency" ? 85000 : 40000) * 100}%`,
+                                      width: `${Math.min(
+                                        100 - ((selectedDepartment === "surgery" ? 35000 : 
+                                                selectedDepartment === "emergency" ? 42000 : 17500) / 
+                                               (selectedDepartment === "surgery" ? 75000 : 
+                                                selectedDepartment === "emergency" ? 85000 : 40000) * 100),
+                                        (calculateTotal() / 
+                                         (selectedDepartment === "surgery" ? 75000 : 
+                                          selectedDepartment === "emergency" ? 85000 : 40000) * 100)
+                                      )}%` 
+                                    }}
+                                  >
+                                    <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-[10px] text-white font-medium">
+                                      Current Order
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
+                                  <span>0%</span>
+                                  <span>25%</span>
+                                  <span>50%</span>
+                                  <span>75%</span>
+                                  <span>100%</span>
+                                </div>
+                              </div>
+                          </div>
+                        </CardContent>
+                        )}
+
+                        {!expandedBudget && (
+                          <CardContent className="p-4">
+                            <div className="flex justify-between items-center">
+                              <div className="flex flex-col">
+                                <span className="text-sm text-muted-foreground">Available Budget</span>
+                                <span className="text-sm font-medium">
+                                  ${selectedDepartment === "surgery" ? "40,000" : 
+                                     selectedDepartment === "emergency" ? "43,000" : "22,500"}
+                                </span>
+                              </div>
+                              <div className="flex flex-col items-end">
+                                <span className="text-sm text-muted-foreground">This Order</span>
+                                <span className="text-sm font-medium">~$10,000</span>
+                              </div>
+                            </div>
+                            
+                            {(selectedDepartment === "surgery" && calculateTotal() > 10000) || 
+                             (selectedDepartment === "emergency" && calculateTotal() > 15000) ? (
+                              <div className="mt-3 flex items-center gap-2">
+                                <AlertCircle className="h-4 w-4 text-amber-500" />
+                                <span className="text-xs text-amber-700">Approval required</span>
+                              </div>
+                            ) : null}
+                          </CardContent>
+                        )}
+                      </Card>
+
+                      {/* Combine Order Section */}
+                      <Card className="overflow-hidden">
+                        <CardHeader className="border-b py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <Truck className="h-5 w-5 text-muted-foreground" />
+                            <CardTitle className="text-base font-medium">Combine Order</CardTitle>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-6">
+                          <div className="flex items-start justify-between">
+                            <div className="max-w-[70%]">
+                              <p className="text-gray-600 mb-6 text-sm">
+                                Current order fills 40% of a standard truck - find a partner to optimize costs and get bulk discounts.
+                              </p>
+                              
+                              <Button 
+                                variant="outline" 
+                                size="default"
+                                className="border border-gray-200 gap-2"
+                              >
+                                <Users className="h-4 w-4" />
+                                Find Partner
+                              </Button>
+                            </div>
+                            
+                            <div className="flex flex-col items-center justify-center">
+                              <div className="w-16 h-24 bg-blue-50 rounded-md overflow-hidden relative border-2 border-blue-300">
+                                <div 
+                                  className="absolute bottom-0 w-full bg-blue-500" 
+                                  style={{ height: '40%' }}
+                                ></div>
+                              </div>
+                              <span className="text-lg font-medium mt-2">40%</span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* AI Insights Section */}
+                    <Card className="overflow-hidden">
+                      <CardHeader onClick={() => setExpandedAIInsights(!expandedAIInsights)} className="border-b py-3 px-4 cursor-pointer">
+                        <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="h-5 w-5 text-muted-foreground" />
+                          <CardTitle className="text-base font-medium">AI Insights</CardTitle>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">5 insights</Badge>
+                            <ChevronDown 
+                              className={`h-4 w-4 transition-transform duration-200 ${
+                                expandedAIInsights ? 'rotate-0' : '-rotate-90'
+                              }`}
+                            />
+                          </div>
+                        </div>
+                      </CardHeader>
+                      {expandedAIInsights && (
+                      <CardContent className="p-0">
+                          <div className="p-6 space-y-8">
+                            {/* Message 1: Budget limit */}
+                            <div>
+                              <div className="flex items-start gap-2 mb-4 bg-blue-50 p-3 rounded-md border border-blue-100">
+                            <Sparkles className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                            <span className="text-blue-700 font-medium">
+                              Items nearing budget limit for Surgery Department:
+                            </span>
+                          </div>
+                          
+                          <div className="space-y-3">
+                            {/* Item 1 */}
+                                <div className="flex justify-between items-center bg-gray-50 p-4 rounded border border-gray-200">
+                              <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded bg-white flex items-center justify-center flex-shrink-0">
+                                  <img src="/placeholder.svg" alt="Product" className="max-w-full max-h-full" />
+                                </div>
+                                    <div>
+                                      <span className="font-medium block">Surgical Gloves (Latex-free)</span>
+                                      <span className="text-sm text-blue-700 font-medium">$1,200</span>
+                              </div>
+                                  </div>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    className="bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-gray-800"
+                                >
+                                    View
+                                </Button>
+                            </div>
+                            
+                            {/* Item 2 */}
+                                <div className="flex justify-between items-center bg-gray-50 p-4 rounded border border-gray-200">
+                              <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded bg-white flex items-center justify-center flex-shrink-0">
+                                  <img src="/placeholder.svg" alt="Product" className="max-w-full max-h-full" />
+                                </div>
+                                    <div>
+                                      <span className="font-medium block">Surgical Masks (N95)</span>
+                                      <span className="text-sm text-blue-700 font-medium">$800</span>
+                              </div>
+                                  </div>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    className="bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-gray-800"
+                                >
+                                    View
+                                </Button>
+                            </div>
+                            
+                            {/* Item 3 */}
+                                <div className="flex justify-between items-center bg-gray-50 p-4 rounded border border-gray-200">
+                              <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded bg-white flex items-center justify-center flex-shrink-0">
+                                  <img src="/placeholder.svg" alt="Product" className="max-w-full max-h-full" />
+                                </div>
+                                    <div>
+                                      <span className="font-medium block">Surgical Gowns (Disposable)</span>
+                                      <span className="text-sm text-blue-700 font-medium">$950</span>
+                              </div>
+                                  </div>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    className="bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-gray-800"
+                                >
+                                    View
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                          
+                            <Separator />
+                            
+                            {/* Message 2: Combining vendors */}
+                            <div>
+                              <div className="flex items-start gap-2 mb-4 bg-green-50 p-3 rounded-md border border-green-100">
+                                <Sparkles className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                                <div className="flex-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-green-700 font-medium">
+                                      Optimize shipping by combining vendors for these items:
+                                    </span>
+                                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">2 items</Badge>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="space-y-3">
+                                {/* Item 1 */}
+                                <div className="flex justify-between items-center bg-gray-50 p-4 rounded border border-gray-200">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded bg-white flex items-center justify-center flex-shrink-0">
+                                      <img src="/placeholder.svg" alt="Product" className="max-w-full max-h-full" />
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-medium">IV Catheters (18G)</span>
+                                        <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Same vendor available</Badge>
+                                      </div>
+                                      <span className="text-sm text-green-700 font-medium">MedLine ($720) → MediSupply ($680)</span>
+                                    </div>
+                                  </div>
+                            <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    className="bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-gray-800"
+                            >
+                                    View
+                            </Button>
+                                </div>
+                                
+                                {/* Item 2 */}
+                                <div className="flex justify-between items-center bg-gray-50 p-4 rounded border border-gray-200">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded bg-white flex items-center justify-center flex-shrink-0">
+                                      <img src="/placeholder.svg" alt="Product" className="max-w-full max-h-full" />
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-medium">Infusion Pump Tubing</span>
+                                        <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Same vendor available</Badge>
+                                      </div>
+                                      <span className="text-sm text-green-700 font-medium">BD Medical ($550) → MediSupply ($565)</span>
+                                    </div>
+                                  </div>
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    className="bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-gray-800"
+                                  >
+                                    View
+                                  </Button>
+                                </div>
+                              </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                      )}
+                    </Card>
+
+                    {/* Order Summary Card - Moved to bottom */}
+                    <Card>
+                      <CardHeader className="border-b bg-muted/30 py-4 px-6">
+                        <div className="flex items-center gap-3">
+                          <ClipboardList className="h-5 w-5 text-muted-foreground" />
+                          <CardTitle className="text-lg">Order Summary</CardTitle>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="p-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                          {/* Left Column - Order Details (larger, spans 2 columns) */}
+                          <div className="md:col-span-2">
+                            {/* Section 1: Order Dates */}
+                            <div className="mb-6">
+                              <h3 className="text-base font-semibold mb-4">Dates</h3>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <span className="text-muted-foreground mb-1 block">Issue Date</span>
+                                  <Input
+                                    type="date"
+                                    value={issueDate}
+                                    onChange={(e) => setIssueDate(e.target.value)}
+                                    className="h-10 text-base px-3"
+                                  />
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground mb-1 block">Due Date</span>
+                                  <Input
+                                    type="date"
+                                    value={dueDate}
+                                    onChange={(e) => setDueDate(e.target.value)}
+                                    className="h-10 text-base px-3"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <Separator className="my-6" />
+                            
+                            {/* Department Selection */}
+                            <div className="mb-6">
+                              <h3 className="text-base font-semibold mb-4">Department</h3>
+                              <div className="flex flex-col gap-1.5">
+                                <span className="text-muted-foreground text-sm">Select department this order belongs to</span>
+                                <Select 
+                                  defaultValue="surgery" 
+                                  value={selectedDepartment}
+                                  onValueChange={(value) => setSelectedDepartment(value)}
+                                >
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Select department" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="surgery">Surgery Department</SelectItem>
+                                    <SelectItem value="emergency">Emergency Department</SelectItem>
+                                    <SelectItem value="cardiology">Cardiology Department</SelectItem>
+                                    <SelectItem value="radiology">Radiology Department</SelectItem>
+                                    <SelectItem value="neurology">Neurology Department</SelectItem>
+                                    <SelectItem value="pediatrics">Pediatrics Department</SelectItem>
+                                    <SelectItem value="laboratory">Laboratory</SelectItem>
+                                    <SelectItem value="it">IT Department</SelectItem>
+                                    <SelectItem value="general">General Supplies</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                            
+                            <Separator className="my-6" />
+                            
+                            {/* Section 2: Order Items Summary */}
+                            <div className="mb-6">
+                              <h3 className="text-base font-semibold mb-4">Items Summary</h3>
+                              <div className="space-y-2 text-base">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-muted-foreground">Items</span>
+                                  <span className="font-medium">{selectedItems.length}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-muted-foreground">Total Units</span>
+                                  <span className="font-medium">
+                                    {selectedItems.reduce((sum, item) => sum + (item.quantity || 0), 0)}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-muted-foreground">Department</span>
+                                  <Badge variant="outline" className="font-medium">
+                                    {selectedDepartment === "surgery" && "Surgery Department"}
+                                    {selectedDepartment === "emergency" && "Emergency Department"}
+                                    {selectedDepartment === "cardiology" && "Cardiology Department"}
+                                    {selectedDepartment === "radiology" && "Radiology Department"}
+                                    {selectedDepartment === "neurology" && "Neurology Department"}
+                                    {selectedDepartment === "pediatrics" && "Pediatrics Department"}
+                                    {selectedDepartment === "laboratory" && "Laboratory"}
+                                    {selectedDepartment === "it" && "IT Department"}
+                                    {selectedDepartment === "general" && "General Supplies"}
+                                  </Badge>
+                                </div>
+                                {/* <div className="flex justify-between items-center">
+                                  <span className="text-muted-foreground">Amount</span>
+                                  <span className="font-semibold text-primary">${calculateTotal().toFixed(2)}</span>
+                                </div> */}
+                              </div>
+                            </div>
+                            
+                            <Separator className="my-6" />
+                            
+                            {/* Section 3: Description */}
+                            <div>
+                              <h3 className="text-base font-semibold mb-4">Description</h3>
+                              <div className="relative">
+                                <Textarea
+                                  placeholder="Add a description for this order..."
+                                  value={orderDescription}
+                                  onChange={(e) => setOrderDescription(e.target.value)}
+                                  className="min-h-[120px] text-base pr-40"
+                                />
+                                <div className="absolute bottom-3 right-3">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 gap-2 text-sm px-3"
+                                    onClick={() => {
+                                      // TODO: Implement AI description generation
+                                      setOrderDescription("Request for Quote for Q2 medical supplies including PPE, catheters, and general medical consumables. Please provide competitive pricing with consideration for bulk discounts. Delivery expected within 2 weeks of order confirmation.")
+                                    }}
+                                  >
+                                    <Sparkles className="h-4 w-4" />
+                                    Write with AMS AI
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Right Column - RFQ Info & Actions (smaller, 1 column) */}
+                          <div className="border-l pl-6">
+                            {/* RFQ Preview Section */}
+                            <div className="mb-6">
+                              <h3 className="text-base font-semibold mb-4">RFQ Preview</h3>
+                              
+                              {showRfqDialog ? (
+                                <Card>
+                                  <CardContent className="p-4">
+                                    <div className="mb-3">
+                                      <h4 className="text-sm font-semibold text-primary">RFQ-{new Date().getFullYear()}-{String(new Date().getMonth() + 1).padStart(2, '0')}{String(new Date().getDate()).padStart(2, '0')}</h4>
+                                      <div className="flex justify-between items-center mt-1 text-sm">
+                                        <span className="text-muted-foreground">Items:</span>
+                                        <span>{selectedItems.length}</span>
+                        </div>
+                                      <div className="flex justify-between items-center mt-1 text-sm">
+                                        <span className="text-muted-foreground">Vendors:</span>
+                                        <span>{Object.keys(selectedVendors || {}).length}</span>
+                                      </div>
+                                      <div className="flex justify-between items-center mt-1 text-sm">
+                                        <span className="text-muted-foreground">Department:</span>
+                                        <span>
+                                          {selectedDepartment === "surgery" && "Surgery"}
+                                          {selectedDepartment === "emergency" && "Emergency"}
+                                          {selectedDepartment === "cardiology" && "Cardiology"}
+                                          {selectedDepartment === "radiology" && "Radiology"}
+                                          {selectedDepartment === "neurology" && "Neurology"}
+                                          {selectedDepartment === "pediatrics" && "Pediatrics"}
+                                          {selectedDepartment === "laboratory" && "Laboratory"}
+                                          {selectedDepartment === "it" && "IT"}
+                                          {selectedDepartment === "general" && "General"}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between items-center mt-1 text-sm">
+                                        <span className="text-muted-foreground">Budget:</span>
+                                        <div className="flex items-center gap-1">
+                                          <span>${calculateTotal().toFixed(2)}</span>
+                                          {selectedDepartment === "surgery" && calculateTotal() > 2000 && (
+                                            <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className="flex justify-between items-center mt-1 text-sm">
+                                        <span className="text-muted-foreground">Status:</span>
+                                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                                          Draft
+                                        </Badge>
+                                      </div>
+                                    </div>
+                          <Button
+                                      size="sm" 
+                                      variant="outline" 
+                                      className="w-full"
+                                      onClick={() => setShowRfqDialog(true)}
+                                    >
+                                      <FileText className="h-4 w-4 mr-2" />
+                                      View Details
+                                    </Button>
+                                  </CardContent>
+                                </Card>
+                              ) : (
+                                <Card className="border-dashed bg-muted/20">
+                                  <CardContent className="p-6">
+                                    <div className="flex flex-col items-center justify-center text-center">
+                                      <FileText className="h-8 w-8 text-muted-foreground mb-2" />
+                                      <p className="text-sm text-muted-foreground mb-1">
+                                        No RFQ generated yet
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        Click "Generate RFQ" to create one
+                                      </p>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              )}
+                            </div>
+                            
+                            <Separator className="my-6" />
+                            
+                            {/* Quick Actions */}
+                            <div>
+                              <h3 className="text-base font-semibold mb-4">Quick Actions</h3>
+                              <div className="space-y-3">
+                                <Button
+                                  className="w-full justify-start items-center gap-2 h-11 text-base"
+                            onClick={handleGenerateRFQ}
+                          >
+                            <FileText className="h-5 w-5" />
+                                  <span>Generate RFQ</span>
+                          </Button>
+                          <Button
+                                  className="w-full justify-start items-center gap-2 h-11 text-base"
+                                  variant="outline"
+                                  disabled={!showRfqDialog}
+                                >
+                                  <Send className="h-5 w-5" />
+                                  <span>Send RFQ</span>
+                                </Button>
+                                <Button
+                                  className="w-full justify-start items-center gap-2 h-11 text-base"
+                            variant="outline"
+                            onClick={handleProceedToOrderConfirmation}
+                          >
+                                  <PhoneCall className="h-5 w-5" />
+                                  <span>Call with AMS</span>
+                          </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
               </>
             )}
 
@@ -2255,205 +2429,27 @@ export default function CreateOrderPage() {
             )}
           </div>
         </div>
-
-        {/* Right Sidebar */}
-        <div className="w-[360px] space-y-4 pt-[120px]"> {/* Increased from pt-[88px] to pt-[120px] */}
-          {/* Always visible Order Summary Card */}
-          <Card className="overflow-hidden">
-            <CardHeader className="border-b bg-muted/30 py-3">
-              <div className="flex items-center gap-2">
-                <ClipboardList className="h-4 w-4 text-muted-foreground" />
-                <CardTitle className="text-base">Order Summary</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              {/* Summary Section */}
-              {selectedItems.length > 0 ? (
-                <div className="px-4 py-3 border-b">
-                  <h3 className="text-sm font-medium mb-2">Summary</h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">Items</span>
-                      <span className="font-medium">{selectedItems.length}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">Total Units</span>
-                      <span className="font-medium">
-                        {selectedItems.reduce((sum, item) => sum + (item.quantity || 0), 0)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">Amount</span>
-                      <span className="font-semibold text-primary">${calculateTotal().toFixed(2)}</span>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="px-4 py-3 border-b">
-                  <h3 className="text-sm font-medium mb-2">Summary</h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">Items</span>
-                      <span className="font-medium">0</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">Total Units</span>
-                      <span className="font-medium">0</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">Amount</span>
-                      <span className="font-semibold text-primary">$0.00</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Budget Section - Only show when there are items */}
-              {selectedItems.length > 0 && (
-                <div className="px-4 py-3 border-b">
-                  <h3 className="text-sm font-medium mb-2">Budget</h3>
-                  
-                  <div className="flex justify-between items-center text-sm mb-3">
-                    <div className="flex-1">
-                      <div className="flex justify-between items-baseline mb-1.5">
-                        {/* <span className="text-muted-foreground">Spent Budget</span> */}
-                        {/* <span className="font-medium">$35,000</span> */}
-                      </div>
-                      
-                      <div className="w-full h-[12px] bg-gray-200 rounded-full overflow-hidden">
-                        <div className="relative w-full h-full">
-                          {/* Spent Budget - 35% */}
-                          <div className="absolute left-0 h-full rounded-l-full bg-gray-500" style={{ width: '35%' }}></div>
-                          
-                          {/* Milestone markers
-                          <div className="absolute left-[75%] top-0 bottom-0 w-[1px] bg-black/20"></div> */}
-                        </div>
-                      </div>
-                      
-                      <div className="flex justify-between mt-2 text-xs">
-                        <div className="flex items-center gap-1">
-                          <div className="w-2 h-2 rounded-full bg-gray-500"></div>
-                          <span>Spent: $35,000</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <div className="w-2 h-2 rounded-full bg-gray-700"></div>
-                          <span>Left: $40,000</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Combine Order Section - Only show when there are items */}
-              {selectedItems.length > 0 && (
-                <div className="px-4 py-3 border-b">
-                  <h3 className="text-sm font-medium mb-2">Combine Order</h3>
-                  
-                  <div className="flex items-center gap-1 text-xs mb-3">
-                    <Truck className="h-3.5 w-3.5 text-blue-500" />
-                    <span className="text-muted-foreground">Add a partner to fill the truck completely</span>
-                  </div>
-                  
-                  <div className="mb-3">
-                    <div className="flex justify-between items-baseline text-sm mb-1.5">
-                      <span className="text-muted-foreground">Truck Capacity</span>
-                      <span className="font-medium">40% filled</span>
-                    </div>
-                    <div className="w-full h-[6px] bg-muted/40 rounded-full">
-                      <div className="h-full rounded-full bg-blue-500" style={{ width: '40%' }}></div>
-                    </div>
-                  </div>
-                  
-                  <Button size="sm" variant="outline" className="w-full h-7 text-xs text-center justify-center">
-                    <Users className="h-3.5 w-3.5 mr-1.5" />
-                    Find Partner
-                  </Button>
-                </div>
-              )}
-
-              {/* AI Insights Section - Only show when there are items */}
-              {selectedItems.length > 0 && (
-                <div className="px-4 py-3 border-b">
-                  <h3 className="text-sm font-medium mb-2">AI Insights</h3>
-                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
-                    <div className="flex items-start gap-2">
-                      <Sparkles className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-sm text-blue-700 mb-2">3 items in this order are nearing budget limit for Surgery Department.</p>
-                        <Button size="sm" variant="outline" className="h-7 w-full text-xs text-center justify-center bg-white text-blue-700 border-blue-200 hover:bg-blue-50">
-                          Review Items
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Action Buttons - Only show when there are items */}
-              {selectedItems.length > 0 ? (
-                <div className="p-4 space-y-2">
-                  <Button
-                    className="w-full justify-center items-center gap-2"
-                    onClick={handleGenerateRFQ}
-                  >
-                    <FileText className="h-4 w-4" />
-                    <span>Create an RFQ</span>
-                  </Button>
-                  <Button
-                    className="w-full justify-center items-center gap-2"
-                    variant="outline"
-                    onClick={handleProceedToOrderConfirmation}
-                  >
-                    <ShoppingCart className="h-4 w-4" />
-                    <span>Buy with AMS</span>
-                  </Button>
-                  <Button
-                    className="w-full justify-center items-center gap-2"
-                    variant="outline"
-                    size="sm"
-                  >
-                    <Mail className="h-4 w-4" />
-                    <span>Email Order</span>
-                  </Button>
-                  <Button
-                    className="w-full justify-center items-center gap-2"
-                    variant="outline"
-                    size="sm"
-                  >
-                    <PhoneCall className="h-4 w-4" />
-                    <span>AI Call</span>
-                  </Button>
-                </div>
-              ) : (
-                <div className="p-4 text-center text-sm text-muted-foreground">
-                  Add items to see full order details
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* AI Insights Card - Removed and integrated into summary card */}
-          
-        </div>
       </div>
 
       {/* Quick Actions Toolbar */}
       <QuickActionsToolbar />
       
+      {/* Add extra padding at the bottom to prevent overlap with quick actions toolbar */}
+      <div className="pb-16"></div>
+      
       {/* Overlays */}
       <OrderDetailsOverlay
         isOpen={isDetailsOverlayOpen}
         onClose={() => setIsDetailsOverlayOpen(false)}
-        item={selectedItem} // Pass selectedItem (can be null)
-        alternativeVendors={selectedItem ? alternativeVendors[selectedItem.id] || [] : []} // Handle null selectedItem
+        item={selectedItem}
+        alternativeVendors={selectedItem ? alternativeVendors[selectedItem.id] || [] : []}
         setSelectedItems={setSelectedItems}
-        handleFindAlternatives={() => selectedItem && handleFindAlternatives(selectedItem)} // Wrap call
+        handleFindAlternatives={() => selectedItem && handleFindAlternatives(selectedItem)}
         loadingAlternatives={loadingAlternatives}
         renderStars={renderStars}
         selectedVendors={selectedVendors}
-        setSelectedVendors={setSelectedVendors} // Pass state setter
-        setSelectedVendorActions={setSelectedVendorActions} // Pass state setter
+        setSelectedVendors={setSelectedVendors}
+        setSelectedVendorActions={setSelectedVendorActions}
         onAddAlternativeVendor={handleAddAlternativeVendor}
       />
 
