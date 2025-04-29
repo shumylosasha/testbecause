@@ -23,11 +23,6 @@ const nextConfig = {
       },
     ],
   },
-  experimental: {
-    webpackBuildWorker: true,
-    parallelServerBuildTraces: true,
-    parallelServerCompiles: true,
-  },
   output: 'standalone',
   // Removing API rewrites that point to the backend
   // async rewrites() {
