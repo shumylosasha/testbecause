@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "NODE_OPTIONS='--max-old-space-size=6144' pnpm run build",
+  "buildCommand": "pnpm run build",
   "installCommand": "pnpm install --frozen-lockfile",
   "framework": "nextjs",
   "regions": ["iad1"],
@@ -9,8 +9,7 @@
       "src": "package.json",
       "use": "@vercel/next",
       "config": {
-        "distDir": ".next",
-        "buildCommand": "NODE_OPTIONS='--max-old-space-size=6144' pnpm run build"
+        "distDir": ".next"
       }
     }
   ]
