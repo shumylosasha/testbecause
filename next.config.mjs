@@ -26,6 +26,7 @@ const nextConfig = {
   output: 'standalone',
   experimental: {
     optimizeCss: true,
+    webpackMemoryOptimizations: true,
     optimizePackageImports: [
       '@radix-ui/react-*',
       'lucide-react',
