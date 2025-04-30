@@ -32,6 +32,13 @@ const nextConfig = {
       'lucide-react',
       'framer-motion',
     ],
+    // Enable memory optimizations
+    swcMinify: true,
+    modularizeImports: {
+      '@radix-ui/react-icons': {
+        transform: '@radix-ui/react-icons/dist/esm/icons/{{member}}',
+      },
+    },
   },
   // Increase memory limit for build
   webpack: (config, { isServer }) => {
@@ -41,7 +48,29 @@ const nextConfig = {
         splitChunks: {
           chunks: 'all',
           minSize: 20000,
-          maxSize: 250000,
+          maxSize: 200000,
+          cacheGroups: {
+            default: false,
+            vendors: false,
+            commons: {
+              name: 'commons',
+              chunks: 'all',
+              minChunks: 2,
+              reuseExistingChunk: true,
+            },
+            react: {
+              name: 'react',
+              test: /[\\/]node_modules[\\/](react|react-dom)[\\/]/,
+              chunks: 'all',
+              priority: 20,
+            },
+            ui: {
+              name: 'ui',
+              test: /[\\/]node_modules[\\/](@radix-ui|framer-motion|lucide-react)[\\/]/,
+              chunks: 'all',
+              priority: 10,
+            },
+          },
         },
       }
     }
