@@ -24,7 +24,6 @@ const nextConfig = {
     ],
   },
   output: 'standalone',
-  // Optimize memory usage
   experimental: {
     optimizeCss: true,
     optimizePackageImports: [
@@ -32,15 +31,7 @@ const nextConfig = {
       'lucide-react',
       'framer-motion',
     ],
-    // Enable memory optimizations
-    swcMinify: true,
-    modularizeImports: {
-      '@radix-ui/react-icons': {
-        transform: '@radix-ui/react-icons/dist/esm/icons/{{member}}',
-      },
-    },
   },
-  // Increase memory limit for build
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.optimization = {
