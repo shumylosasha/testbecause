@@ -48,14 +48,6 @@ import {
 // Mock data for catalog items that can be added to the quote
 const catalogItems = [
   {
-    id: "PRD-1248",
-    name: "Surgical Gloves (Medium)",
-    category: "PPE",
-    sku: "SRG-GLV-MED",
-    price: 12.99,
-    stock: 842
-  },
-  {
     id: "PRD-1247",
     name: "IV Catheter 20G",
     category: "Medical Supplies",
@@ -106,14 +98,6 @@ export default function RFQPage({ params }: { params: { id: string } }) {
     },
     description: "Request for Quote for Q2 medical supplies including PPE, catheters, and general medical consumables. Please provide competitive pricing with consideration for bulk discounts. Delivery expected within 2 weeks of order confirmation.",
     items: [
-      {
-        id: 1,
-        name: "Surgical Gloves (Medium)",
-        description: "Powder-free, latex-free, size medium",
-        quantity: 5000,
-        unit: "pairs",
-        specifications: "Must be compliant with ASTM D3578 and EN 455 standards",
-      },
       {
         id: 2,
         name: "IV Catheter 20G",

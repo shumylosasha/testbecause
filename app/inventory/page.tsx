@@ -21,6 +21,7 @@ import Link from "next/link"
 import { InventoryQuickActions } from "../components/inventory-quick-actions"
 import Image from "next/image"
 import AiInsightOverlay from "../components/AiInsightOverlay"
+import GenericInsightOverlay from "../components/GenericInsightOverlay"
 
 // Define the AiInsight type locally or import if shared
 interface AiInsight {
@@ -35,6 +36,9 @@ export default function InventoryPage() {
   const [items, setItems] = useState(inventoryData)
   const [isAiInsightOpen, setIsAiInsightOpen] = useState(false) // State for overlay visibility
   const [selectedInsight, setSelectedInsight] = useState<AiInsight | null>(null) // State for insight data
+  const [isGenericInsightOpen, setIsGenericInsightOpen] = useState(false)
+  const [genericInsightContent, setGenericInsightContent] = useState<React.ReactNode>(null)
+  const [genericInsightTitle, setGenericInsightTitle] = useState<string>("AI Product Matches")
 
   const filteredItems = items.filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
 
@@ -105,8 +109,50 @@ export default function InventoryPage() {
   }
 
   const handleViewInsight = () => {
-    setSelectedInsight(currentInsight); // Set the insight data
-    setIsAiInsightOpen(true);      // Open the overlay
+    setSelectedInsight(currentInsight)
+    setIsAiInsightOpen(true)
+  }
+
+  const handleAIInsight = (insight: any) => {
+    if (insight?.trendData?.type === "product_match") {
+      setGenericInsightTitle("AI Product Matches")
+      setGenericInsightContent(
+        <div>
+          <p className="mb-4 text-base">Here are <b>{insight.items.length}</b> products that match your needs:</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            {insight.trendData.details.map((item: any, idx: number) => (
+              <div key={idx} className="rounded-xl border border-gray-200 bg-gray-50 p-4 flex flex-col gap-2 shadow-sm">
+                <div className="flex items-center gap-3 mb-2">
+                  {item.image ? (
+                    <Image src={item.image} alt={item.name} width={48} height={48} className="rounded bg-white object-contain border w-12 h-12" unoptimized />
+                  ) : (
+                    <div className="w-12 h-12 bg-gray-200 flex items-center justify-center rounded"> <span className="text-gray-400 text-xs">No image</span> </div>
+                  )}
+                  <div>
+                    <div className="font-semibold text-blue-700 text-base">{item.name}</div>
+                    {typeof item.matchScore === 'number' && (
+                      <div className="text-xs text-gray-500">Match: <span className="font-bold">{(item.matchScore * 100).toFixed(0)}%</span></div>
+                    )}
+                  </div>
+                </div>
+                <div className="text-xs text-gray-600 mb-2">
+                  Price: <span className="font-medium">${item.currentPrice}</span> → <span className="text-green-700 font-medium">${item.suggestedPrice}</span>
+                </div>
+                <div className="flex gap-2 mt-auto">
+                  <Button size="sm" className="flex-1 bg-primary text-white hover:bg-primary/90" onClick={() => alert(`Added ${item.name} to order!`)}>Add to Order</Button>
+                  <Button size="sm" variant="outline" className="flex-1" onClick={() => alert(`Viewing details for ${item.name}`)}>View Details</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-gray-700 text-sm">These were selected based on your recent inventory trends and price drops.</p>
+        </div>
+      )
+      setIsGenericInsightOpen(true)
+    } else {
+      setSelectedInsight(insight)
+      setIsAiInsightOpen(true)
+    }
   }
 
   return (
@@ -282,13 +328,24 @@ export default function InventoryPage() {
         selectedItemsCount={selectedItems.length}
         onCreateOrder={handleCreateOrder}
         onNewItemsAdded={handleNewItemsAdded}
+        onViewAIInsight={handleAIInsight}
       />
 
-      {/* Render the AI Insight Overlay */}
       <AiInsightOverlay 
         isOpen={isAiInsightOpen}
         onClose={() => setIsAiInsightOpen(false)}
         insight={selectedInsight}
+      />
+
+      <GenericInsightOverlay
+        isOpen={isGenericInsightOpen}
+        onClose={() => setIsGenericInsightOpen(false)}
+        title={genericInsightTitle}
+        icon={<Bot className="h-5 w-5 text-blue-600" />}
+        content={genericInsightContent}
+        actions={
+          <Button onClick={() => setIsGenericInsightOpen(false)} className="w-full">Close</Button>
+        }
       />
     </div>
   )

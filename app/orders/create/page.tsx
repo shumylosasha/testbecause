@@ -376,14 +376,13 @@ export default function CreateOrderPage() {
   const [loadingAISuggestions, setLoadingAISuggestions] = useState(false)
   const [showRfqDialog, setShowRfqDialog] = useState(false)
   const [isGeneratingRfq, setIsGeneratingRfq] = useState(false)
-  // Add these state variables near the top with other state declarations
   const [selectedUnits, setSelectedUnits] = useState<{ [key: string]: string }>({})
   const [specifications, setSpecifications] = useState<{ [key: string]: string }>({})
   const [expandedAIInsights, setExpandedAIInsights] = useState(false); // Initialize as collapsed
   const [selectedDepartment, setSelectedDepartment] = useState("surgery")
   const [expandedBudget, setExpandedBudget] = useState(false); // Add this state for budget expansion
-  // Add a new state for tracking item departments
   const [itemDepartments, setItemDepartments] = useState<{ [key: string]: string }>({})
+  const [isFromInventoryQuickActions, setIsFromInventoryQuickActions] = useState(false)
 
   // Add department options
   const departmentOptions = [
@@ -835,6 +834,8 @@ export default function CreateOrderPage() {
   }, [showFilters])
 
   const handleImportCSV = () => {
+    // Reset the flag when uploading inventory
+    setIsFromInventoryQuickActions(false);
     // Transform inventory data to match the expected format for selected items
     const importedItems: OrderItem[] = inventoryData.map(item => { // Explicitly type mapped array
       const defaultVendor = item.vendors[0];
@@ -1000,6 +1001,78 @@ export default function CreateOrderPage() {
     addItemToOrder(item)
     setAiSuggestedItems(prev => prev.filter(i => i.id !== item.id))
   }
+
+  // Add this useEffect near the top of the component, after state declarations
+  useEffect(() => {
+    // Check for rfqItemDetails in sessionStorage
+    const rfqItemDetails = sessionStorage.getItem('rfqItemDetails');
+    if (rfqItemDetails) {
+      try {
+        const itemData = JSON.parse(rfqItemDetails);
+        // Create a new item with the required structure
+        const newItem: OrderItem = {
+          id: `item-${Date.now()}`, // Generate a unique ID
+          name: "Surgical Gloves (Medium)",
+          sku: "SG-MED-001",
+          quantity: 1,
+          unit: 'boxes',
+          price: itemData.currentPrice,
+          currentStock: 0,
+          totalStock: 0,
+          status: 'stock',
+          category: 'Personal Protective Equipment',
+          packaging: 'Box of 100',
+          expiresIn: '36 months',
+          unitPrice: itemData.currentPrice,
+          requiredUnits: 1,
+          manufacturer: 'Medline',
+          image: 'https://imgcdn.mckesson.com/CumulusWeb/Images/Original_Image/1020958.jpg',
+          description: 'Latex-free, powder-free surgical gloves. Medium size. ASTM D3578 compliant. Box of 100 gloves.',
+          vendors: [{
+            id: 'medline',
+            name: 'Medline',
+            pricePerUnit: itemData.suggestedPrice,
+            status: {
+              isCurrentVendor: true,
+              isSelected: true
+            },
+            image_url: 'https://upload.wikimedia.org/wikipedia/en/thumb/8/89/Medline-logo.svg/800px-Medline-logo.svg.png'
+          }],
+          selectedVendor: {
+            id: 'medline',
+            name: 'Medline',
+            pricePerUnit: itemData.suggestedPrice,
+            status: {
+              isCurrentVendor: true,
+              isSelected: true
+            },
+            image_url: 'https://upload.wikimedia.org/wikipedia/en/thumb/8/89/Medline-logo.svg/800px-Medline-logo.svg.png'
+          },
+          selectedVendorIds: ['medline'],
+          selectedVendors: [{
+            id: 'medline',
+            name: 'Medline',
+            pricePerUnit: itemData.suggestedPrice,
+            status: {
+              isCurrentVendor: true,
+              isSelected: true
+            },
+            image_url: 'https://upload.wikimedia.org/wikipedia/en/thumb/8/89/Medline-logo.svg/800px-Medline-logo.svg.png'
+          }]
+        };
+
+        // Add the item to selectedItems
+        setSelectedItems([newItem]);
+        // Set the flag to indicate we're coming from inventory quick actions
+        setIsFromInventoryQuickActions(true);
+        
+        // Clear the sessionStorage after using it
+        sessionStorage.removeItem('rfqItemDetails');
+      } catch (error) {
+        console.error('Error processing RFQ item details:', error);
+      }
+    }
+  }, []);
 
   return (
     <>
@@ -1684,7 +1757,7 @@ export default function CreateOrderPage() {
                 )}
 
                 {/* Order Summary, Budget, Combine Order, and AI Insights Sections */}
-                {selectedItems.length > 0 && (
+                {selectedItems.length > 0 && (!isFromInventoryQuickActions || selectedItems[0].name !== "Surgical Gloves (Medium)") && (
                   <div className="space-y-4">
                     {/* Unified Insights Card */}
                     <Card className="overflow-hidden">
@@ -2213,6 +2286,24 @@ export default function CreateOrderPage() {
                       </Card>
                     </div>
                   </div>
+                )}
+
+                {/* Remove RFQ card for Surgical Gloves */}
+                {selectedItems.length > 0 && selectedItems[0].name !== "Surgical Gloves (Medium)" && (
+                  <Card>
+                    <CardHeader className="border-b bg-muted/30 py-4 px-6">
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-5 w-5 text-blue-600" />
+                        <CardTitle className="text-lg">RFQ for Selected Items</CardTitle>
+                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                          {selectedItems.length} items
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-6">
+                      {/* RFQ content */}
+                    </CardContent>
+                  </Card>
                 )}
               </>
             )}

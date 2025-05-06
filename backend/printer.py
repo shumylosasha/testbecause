@@ -47,7 +47,7 @@ class Printer:
                 renderables.append(prefix + content)
             else:
                 renderables.append(Spinner("dots", text=content))
-        self.live.update(Group(*renderables))
+        self.live.update(Group(*renderables), refresh=True)
 
     # Keep the original methods for backward compatibility
     def print_step(self, message: str):

@@ -22,6 +22,7 @@ import {
   ChevronLeft,
   Mic,
   Menu,
+  Trash2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Progress } from "@/components/ui/progress"
@@ -34,6 +35,7 @@ interface InventoryQuickActionsProps {
   selectedItemsCount: number
   onCreateOrder: () => void
   onNewItemsAdded?: (items: any[]) => void
+  onViewAIInsight?: (insight: any) => void
 }
 
 type AINotification = {
@@ -46,6 +48,39 @@ type AINotification = {
     label: string
     onClick: () => void
   }
+  itemDetails?: {
+    name: string
+    sku: string
+    currentPrice: number
+    suggestedPrice: number
+  }
+}
+
+type AIChatMessage = {
+  role: "user" | "assistant"
+  content: string
+  action?: {
+    label: string
+    onClick: () => void
+  }
+  cards?: {
+    type: "cost-savings" | "low-stock" | "alternative-vendors" | "similar-products"
+    items: Array<{
+      name: string
+      sku: string
+      currentPrice?: number
+      suggestedPrice?: number
+      currentStock?: number
+      reorderPoint?: number
+      vendor?: string
+      savings?: number
+      rating?: number
+      similarity?: number
+      category?: string
+      specifications?: string
+    }>
+  }
+  loading?: boolean
 }
 
 type UploadStatus = "idle" | "ready" | "uploading" | "processing" | "analyzing" | "complete"
@@ -57,21 +92,13 @@ export function InventoryQuickActions({
   selectedItemsCount,
   onCreateOrder,
   onNewItemsAdded,
+  onViewAIInsight,
 }: InventoryQuickActionsProps) {
   const [showNotificationList, setShowNotificationList] = useState(false)
   const [showAIChat, setShowAIChat] = useState(false)
   const [showChatHistory, setShowChatHistory] = useState(false)
   const [aiChatInput, setAIChatInput] = useState("")
-  const [aiChatMessages, setAIChatMessages] = useState<
-    Array<{
-      role: "user" | "assistant"
-      content: string
-      action?: {
-        label: string
-        onClick: () => void
-      }
-    }>
-  >(() => {
+  const [aiChatMessages, setAIChatMessages] = useState<AIChatMessage[]>(() => {
     // Load chat history from localStorage on component mount
     if (typeof window !== 'undefined') {
       const savedChat = localStorage.getItem('inventory-chat-history')
@@ -100,34 +127,41 @@ export function InventoryQuickActions({
   const toolbarRef = useRef<HTMLDivElement>(null)
   const [showAISuggestions, setShowAISuggestions] = useState(false)
   const router = useRouter()
+  const chatMessagesEndRef = useRef<HTMLDivElement>(null)
 
   // Generate and manage AI notifications
   useEffect(() => {
     // Initial notifications
     const initialNotifications: AINotification[] = [
       {
-        id: "1",
-        message: "I found 3 new products that match your inventory needs",
-        timestamp: new Date(Date.now() - 1000 * 60 * 5), // 5 minutes ago
+        id: "notif-1",
+        message: "Your inventory is running low on Surgical Gloves",
+        type: "alert",
         read: false,
-        type: "info",
+        timestamp: new Date(),
         action: {
-          label: "View Products",
-          onClick: () => alert("Navigating to new products..."),
+          label: "View Details",
+          onClick: () => {
+            // Navigate to inventory page with filter for Surgical Gloves
+            window.location.href = "/inventory?filter=surgical-gloves";
+          },
         },
       },
       {
-        id: "2",
-        message: "Prices for surgical gloves have dropped by 15% from your usual supplier",
-        timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
+        id: "notif-2",
+        message: "New vendor prices available for Medical Masks",
+        type: "suggestion",
         read: false,
-        type: "alert",
+        timestamp: new Date(),
         action: {
-          label: "Create RFQ",
-          onClick: () => alert("Creating RFQ for surgical gloves..."),
+          label: "View Prices",
+          onClick: () => {
+            // Navigate to vendor comparison page
+            window.location.href = "/vendors/compare?item=medical-masks";
+          },
         },
-      },
-    ]
+      }
+    ];
 
     setNotifications(initialNotifications)
     updateUnreadCount(initialNotifications)
@@ -172,6 +206,29 @@ export function InventoryQuickActions({
               onClick: () => alert("Applying optimized reorder points..."),
             },
           },
+          {
+            message: "Price drop alert: Medical masks now available at 20% lower cost",
+            type: "alert",
+            action: {
+              label: "Create RFQ",
+              onClick: () => {
+                const itemDetails = {
+                  name: "Medical Masks",
+                  sku: "MM-001",
+                  currentPrice: 120,
+                  suggestedPrice: 96
+                };
+                sessionStorage.setItem('rfqItemDetails', JSON.stringify(itemDetails));
+                window.location.href = "/orders/create";
+              },
+            },
+            itemDetails: {
+              name: "Medical Masks",
+              sku: "MM-001",
+              currentPrice: 120,
+              suggestedPrice: 96
+            }
+          },
         ]
 
         const randomType = newNotificationTypes[Math.floor(Math.random() * newNotificationTypes.length)]
@@ -200,7 +257,7 @@ export function InventoryQuickActions({
     }, 45000) // Add new notification every 45 seconds
 
     return () => clearInterval(interval)
-  }, [uploadStatus, onCreateOrder])
+  }, [uploadStatus, onCreateOrder, onViewAIInsight])
 
   // Handle drag and drop events
   useEffect(() => {
@@ -352,7 +409,38 @@ export function InventoryQuickActions({
           unitPrice: 75,
           requiredUnits: 50,
           manufacturer: "McKesson",
-          image: "https://imgcdn.mckesson.com/CumulusWeb/Images/Original_Image/1020958.jpg"
+          image: "https://imgcdn.mckesson.com/CumulusWeb/Images/Original_Image/1020958.jpg",
+          vendors: [{
+            id: 'mckesson',
+            name: 'McKesson',
+            pricePerUnit: 75,
+            status: {
+              isCurrentVendor: true,
+              isSelected: true
+            },
+            image_url: 'https://www.mckesson.com/assets/img/mckesson-logo.svg'
+          }],
+          selectedVendor: {
+            id: 'mckesson',
+            name: 'McKesson',
+            pricePerUnit: 75,
+            status: {
+              isCurrentVendor: true,
+              isSelected: true
+            },
+            image_url: 'https://www.mckesson.com/assets/img/mckesson-logo.svg'
+          },
+          selectedVendorIds: ['mckesson'],
+          selectedVendors: [{
+            id: 'mckesson',
+            name: 'McKesson',
+            pricePerUnit: 75,
+            status: {
+              isCurrentVendor: true,
+              isSelected: true
+            },
+            image_url: 'https://www.mckesson.com/assets/img/mckesson-logo.svg'
+          }]
         },
         {
           id: `new-${Date.now()}-2`,
@@ -369,7 +457,38 @@ export function InventoryQuickActions({
           unitPrice: 220,
           requiredUnits: 30,
           manufacturer: "McKesson",
-          image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSnmi2uYcU6pT08t7cpkjs_6nwFOqwC_lKp3Q&s"
+          image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSnmi2uYcU6pT08t7cpkjs_6nwFOqwC_lKp3Q&s",
+          vendors: [{
+            id: 'mckesson',
+            name: 'McKesson',
+            pricePerUnit: 220,
+            status: {
+              isCurrentVendor: true,
+              isSelected: true
+            },
+            image_url: 'https://www.mckesson.com/assets/img/mckesson-logo.svg'
+          }],
+          selectedVendor: {
+            id: 'mckesson',
+            name: 'McKesson',
+            pricePerUnit: 220,
+            status: {
+              isCurrentVendor: true,
+              isSelected: true
+            },
+            image_url: 'https://www.mckesson.com/assets/img/mckesson-logo.svg'
+          },
+          selectedVendorIds: ['mckesson'],
+          selectedVendors: [{
+            id: 'mckesson',
+            name: 'McKesson',
+            pricePerUnit: 220,
+            status: {
+              isCurrentVendor: true,
+              isSelected: true
+            },
+            image_url: 'https://www.mckesson.com/assets/img/mckesson-logo.svg'
+          }]
         }
       ]
 
@@ -383,6 +502,9 @@ export function InventoryQuickActions({
       if (onNewItemsAdded) {
         onNewItemsAdded(newItems)
       }
+
+      // Navigate to orders/create page to show Ready to Purchase and Order Insights
+      window.location.href = "/orders/create"
 
       // Reset after a delay
       setTimeout(() => {
@@ -542,64 +664,185 @@ export function InventoryQuickActions({
     setAIChatMessages((prev) => [...prev, userMessage])
     setAIChatInput("")
 
-    // Simulate AI response
+    // Add loading state
+    const loadingMessage = {
+      role: "assistant" as const,
+      content: "Analyzing your request...",
+      loading: true
+    }
+    setAIChatMessages((prev) => [...prev, loadingMessage])
+
+    // Simulate AI response with delay
     setTimeout(() => {
-      const responses = [
-        {
-          text: "I can help you find alternatives for this product that might save costs.",
-          action: {
-            label: "Search Alternatives",
-            onClick: () => alert("Searching for alternatives..."),
-          },
-        },
-        {
-          text: "Based on your inventory data, I recommend ordering more of these items soon.",
-          action: {
-            label: "Create Order",
-            onClick: () => onCreateOrder(),
-          },
-        },
-        {
-          text: "I've analyzed your procurement patterns and found potential savings of $1,250.",
-          action: {
-            label: "View Savings Report",
-            onClick: () => alert("Viewing savings report..."),
-          },
-        },
-        {
-          text: "Several items have shown price fluctuations recently. Would you like me to monitor them?",
-          action: {
-            label: "Set Up Monitoring",
-            onClick: () => alert("Setting up price monitoring..."),
-          },
-        },
-        {
-          text: "I can generate a report of similar products from different vendors if you'd like.",
-          action: {
-            label: "Generate Report",
-            onClick: () => alert("Generating vendor comparison report..."),
-          },
-        },
-        {
-          text: "Would you like me to notify your suppliers about your upcoming needs?",
-          action: {
-            label: "Contact Suppliers",
-            onClick: () => alert("Sending email to suppliers..."),
-          },
-        },
-      ]
-      const randomResponse = responses[Math.floor(Math.random() * responses.length)]
+      // Remove loading message
+      setAIChatMessages((prev) => prev.filter(msg => !msg.loading))
 
-      const aiMessage = {
-        role: "assistant" as const,
-        content: randomResponse.text,
-        action: randomResponse.action,
+      let aiResponse: AIChatMessage
+
+      if (aiChatInput.toLowerCase().includes("cost saving") || aiChatInput.toLowerCase().includes("savings")) {
+        aiResponse = {
+          role: "assistant",
+          content: "I've found several cost-saving opportunities in your inventory:",
+          cards: {
+            type: "cost-savings",
+            items: [
+              {
+                name: "Surgical Gloves",
+                sku: "SG-001",
+                currentPrice: 85,
+                suggestedPrice: 72.25,
+                savings: 15
+              },
+              {
+                name: "Medical Masks",
+                sku: "MM-001",
+                currentPrice: 120,
+                suggestedPrice: 96,
+                savings: 20
+              },
+              {
+                name: "IV Catheters",
+                sku: "IV-001",
+                currentPrice: 45,
+                suggestedPrice: 38.25,
+                savings: 15
+              }
+            ]
+          }
+        }
+      } else if (aiChatInput.toLowerCase().includes("running low") || aiChatInput.toLowerCase().includes("low stock")) {
+        aiResponse = {
+          role: "assistant",
+          content: "Here are the items that are running low and need attention:",
+          cards: {
+            type: "low-stock",
+            items: [
+              {
+                name: "Surgical Gloves",
+                sku: "SG-001",
+                currentStock: 50,
+                reorderPoint: 100
+              },
+              {
+                name: "Medical Masks",
+                sku: "MM-001",
+                currentStock: 75,
+                reorderPoint: 150
+              },
+              {
+                name: "IV Catheters",
+                sku: "IV-001",
+                currentStock: 30,
+                reorderPoint: 80
+              }
+            ]
+          }
+        }
+      } else if (aiChatInput.toLowerCase().includes("alternative vendor") || aiChatInput.toLowerCase().includes("alternative vendors")) {
+        aiResponse = {
+          role: "assistant",
+          content: "Which product would you like to find alternative vendors for?",
+          action: {
+            label: "Search All Products",
+            onClick: () => {
+              setAIChatMessages((prev) => [...prev, {
+                role: "assistant",
+                content: "Here are some alternative vendors for your products:",
+                cards: {
+                  type: "alternative-vendors",
+                  items: [
+                    {
+                      name: "Surgical Gloves",
+                      sku: "SG-001",
+                      vendor: "MedSupply Co.",
+                      rating: 4.5,
+                      suggestedPrice: 72.25
+                    },
+                    {
+                      name: "Medical Masks",
+                      sku: "MM-001",
+                      vendor: "HealthTech Solutions",
+                      rating: 4.8,
+                      suggestedPrice: 96
+                    },
+                    {
+                      name: "IV Catheters",
+                      sku: "IV-001",
+                      vendor: "MediCorp",
+                      rating: 4.2,
+                      suggestedPrice: 38.25
+                    }
+                  ]
+                }
+              }])
+            }
+          }
+        }
+      } else if (aiChatInput.toLowerCase().includes("similar") || aiChatInput.toLowerCase().includes("find similar")) {
+        aiResponse = {
+          role: "assistant",
+          content: "Which product would you like to find similar items for?",
+          action: {
+            label: "Search All Products",
+            onClick: () => {
+              setAIChatMessages((prev) => [...prev, {
+                role: "assistant",
+                content: "Here are some similar products I found:",
+                cards: {
+                  type: "similar-products",
+                  items: [
+                    {
+                      name: "Premium Surgical Gloves",
+                      sku: "SG-002",
+                      category: "Surgical Supplies",
+                      similarity: 95,
+                      specifications: "Latex-free, Powder-free, Size M",
+                      currentPrice: 78.50
+                    },
+                    {
+                      name: "Elite Medical Masks",
+                      sku: "MM-002",
+                      category: "PPE",
+                      similarity: 92,
+                      specifications: "3-ply, ASTM Level 2",
+                      currentPrice: 110.00
+                    },
+                    {
+                      name: "Advanced IV Catheters",
+                      sku: "IV-002",
+                      category: "IV Supplies",
+                      similarity: 88,
+                      specifications: "20G, Safety Lock",
+                      currentPrice: 42.75
+                    }
+                  ]
+                }
+              }])
+            }
+          }
+        }
+      } else {
+        // Default response for other queries
+        aiResponse = {
+          role: "assistant",
+          content: "I can help you with that. Would you like to:",
+          action: {
+            label: "Find Cost Savings",
+            onClick: () => {
+              setAIChatInput("Find cost saving opportunities")
+              setTimeout(() => {
+                const form = document.getElementById('ai-chat-form')
+                if (form) {
+                  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+                }
+              }, 0)
+            }
+          }
+        }
       }
-      setAIChatMessages((prev) => [...prev, aiMessage])
-    }, 1000)
 
-    // Call the actual onChatWithAI function if needed
-    // onChatWithAI()
+      setAIChatMessages((prev) => [...prev, aiResponse])
+    }, 1500)
   }
 
   const handleCreateOrder = () => {
@@ -615,7 +858,44 @@ export function InventoryQuickActions({
     if (typeof window !== 'undefined') {
       localStorage.setItem('inventory-chat-history', JSON.stringify(aiChatMessages))
     }
+    // Autoscroll to bottom on new message
+    if (chatMessagesEndRef.current) {
+      chatMessagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [aiChatMessages])
+
+  const handleCardClick = (sku: string) => {
+    // Map SKUs to their corresponding inventory IDs
+    const skuToInventoryId: { [key: string]: string } = {
+      'SG-001': 'inv-001',
+      'MM-001': 'inv-002',
+      'IV-001': 'inv-003',
+      'SG-002': 'inv-004',
+      'MM-002': 'inv-005',
+      'IV-002': 'inv-006',
+    }
+
+    const inventoryId = skuToInventoryId[sku]
+    if (inventoryId) {
+      router.push(`/inventory/${inventoryId}`)
+    }
+  }
+
+  const clearChatHistory = () => {
+    // Reset to initial welcome message
+    setAIChatMessages([{
+      role: "assistant",
+      content: "Hello! I'm your procurement assistant. How can I help you today?",
+      action: {
+        label: "View Dashboard",
+        onClick: () => (window.location.href = "/"),
+      },
+    }])
+    // Clear from localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('inventory-chat-history')
+    }
+  }
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
@@ -673,12 +953,20 @@ export function InventoryQuickActions({
 
       {/* AI Chat input with light theme */}
       {showAIChat && (
-        <div className={`absolute bottom-full mb-2 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden flex flex-row transition-all duration-200 ${showChatHistory ? 'w-[864px]' : 'w-[600px]'} max-w-full`}>
+        <div className={`fixed bottom-16 left-1/2 -translate-x-1/2 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden flex flex-row transition-all duration-200 ${showChatHistory ? 'w-[864px]' : 'w-[600px]'} max-w-[90vw]`}>
           {/* Sidebar on the left */}
           {showChatHistory && (
             <div className="w-64 border-r border-gray-200 transition-all duration-200">
-              <div className="p-3 border-b border-gray-200">
+              <div className="p-3 border-b border-gray-200 flex justify-between items-center">
                 <h5 className="font-medium text-sm text-gray-900">Chat History</h5>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+                  onClick={clearChatHistory}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
               <div className="h-[300px] overflow-y-auto">
                 {aiChatMessages.map((msg, index) => (
@@ -707,7 +995,6 @@ export function InventoryQuickActions({
           <div className="w-[600px] flex flex-col">
             <div className="flex items-center justify-between p-3 border-b border-gray-200">
               <div className="flex items-center gap-2">
-                <h4 className="font-medium text-gray-900">Chat with AI Assistant</h4>
                 <Button 
                   variant="ghost" 
                   size="icon"
@@ -716,10 +1003,26 @@ export function InventoryQuickActions({
                 >
                   <Menu className="h-4 w-4" />
                 </Button>
+                <h4 className="font-medium text-gray-900">Chat with AI Assistant</h4>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => setShowAIChat(false)} className="text-gray-500 hover:bg-gray-100 hover:text-gray-900">
-                <X className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+                  onClick={clearChatHistory}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => setShowAIChat(false)} 
+                  className="text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
             <div className="p-3 max-h-[300px] overflow-y-auto">
               {aiChatMessages.map((msg, index) => (
@@ -730,6 +1033,78 @@ export function InventoryQuickActions({
                     {msg.role === "assistant" && <div className="h-5 w-5 mt-0.5 shrink-0 bg-primary rounded-full"></div>}
                     <div>
                       <p className="text-sm">{msg.content}</p>
+                      {msg.loading && (
+                        <div className="flex items-center gap-2 mt-2">
+                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                          <span className="text-sm text-gray-500">Processing...</span>
+                        </div>
+                      )}
+                      {msg.cards && (
+                        <div className="mt-3 grid grid-cols-1 gap-2">
+                          {msg.cards.items.map((item, idx) => (
+                            <div 
+                              key={idx} 
+                              className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm hover:border-primary hover:shadow-md transition-all cursor-pointer"
+                              onClick={() => handleCardClick(item.sku)}
+                            >
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <h4 className="font-medium text-gray-900">{item.name}</h4>
+                                  <p className="text-sm text-gray-500">SKU: {item.sku}</p>
+                                </div>
+                                {msg.cards?.type === "cost-savings" && item.savings && (
+                                  <span className="text-green-600 font-medium">{item.savings}% savings</span>
+                                )}
+                                {msg.cards?.type === "low-stock" && item.currentStock && (
+                                  <span className="text-amber-600 font-medium">
+                                    {item.currentStock} units left
+                                  </span>
+                                )}
+                                {msg.cards?.type === "alternative-vendors" && item.rating && (
+                                  <span className="text-blue-600 font-medium">
+                                    Rating: {item.rating}/5
+                                  </span>
+                                )}
+                                {msg.cards?.type === "similar-products" && item.similarity && (
+                                  <span className="text-purple-600 font-medium">
+                                    {item.similarity}% match
+                                  </span>
+                                )}
+                              </div>
+                              {msg.cards?.type === "cost-savings" && (
+                                <div className="mt-2 flex justify-between text-sm">
+                                  <span className="text-gray-500">Current: ${item.currentPrice}</span>
+                                  <span className="text-green-600">Suggested: ${item.suggestedPrice}</span>
+                                </div>
+                              )}
+                              {msg.cards?.type === "low-stock" && (
+                                <div className="mt-2 text-sm text-gray-500">
+                                  Reorder point: {item.reorderPoint} units
+                                </div>
+                              )}
+                              {msg.cards?.type === "alternative-vendors" && (
+                                <div className="mt-2 flex justify-between text-sm">
+                                  <span className="text-gray-500">Vendor: {item.vendor}</span>
+                                  <span className="text-green-600">Price: ${item.suggestedPrice}</span>
+                                </div>
+                              )}
+                              {msg.cards?.type === "similar-products" && (
+                                <div className="mt-2 space-y-1">
+                                  <div className="text-sm text-gray-500">
+                                    Category: {item.category}
+                                  </div>
+                                  <div className="text-sm text-gray-500">
+                                    Specifications: {item.specifications}
+                                  </div>
+                                  <div className="text-sm text-gray-500">
+                                    Price: ${item.currentPrice}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       {msg.role === "assistant" && msg.action && (
                         <Button
                           variant="outline"
@@ -744,9 +1119,10 @@ export function InventoryQuickActions({
                   </div>
                 </div>
               ))}
+              <div ref={chatMessagesEndRef} />
             </div>
             <div className="p-3 border-t border-gray-200">
-              <form onSubmit={handleAIChatSubmit} className="flex gap-2">
+              <form id="ai-chat-form" onSubmit={handleAIChatSubmit} className="flex gap-2">
                 <div className="flex-1 flex gap-2">
                   <Input
                     value={aiChatInput}
@@ -787,7 +1163,13 @@ export function InventoryQuickActions({
                       size="sm"
                       className="text-xs h-auto py-1 border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
                       onClick={() => {
-                        setAIChatInput(suggestion)
+                        setAIChatInput(suggestion);
+                        setTimeout(() => {
+                          const form = document.getElementById('ai-chat-form');
+                          if (form) {
+                            form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                          }
+                        }, 0);
                       }}
                     >
                       {suggestion}
