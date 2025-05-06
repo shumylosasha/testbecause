@@ -160,29 +160,29 @@ export function QuickActionsToolbar() {
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
       {/* Notification list */}
       {showNotificationList && (
-        <div className="absolute bottom-full mb-2 w-80 bg-gray-900 border border-gray-700 rounded-lg shadow-lg overflow-hidden text-gray-200">
-          <div className="flex items-center justify-between p-3 border-b border-gray-700">
-            <h4 className="font-medium">AI Notifications</h4>
-            <Button variant="ghost" size="sm" onClick={markAllAsRead} className="text-gray-300 hover:bg-gray-800 hover:text-white">
+        <div className="absolute bottom-full mb-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+          <div className="flex items-center justify-between p-3 border-b border-gray-200">
+            <h4 className="font-medium text-gray-900">AI Notifications</h4>
+            <Button variant="ghost" size="sm" onClick={markAllAsRead} className="text-gray-600 hover:bg-gray-100 hover:text-gray-900">
               Mark all as read
             </Button>
           </div>
           <div className="max-h-[300px] overflow-y-auto">
             {notifications.length > 0 ? (
-              <div className="divide-y divide-gray-700">
+              <div className="divide-y divide-gray-200">
                 {notifications.map((notification) => (
                   <div
                     key={notification.id}
                     className={cn(
-                      "p-3 hover:bg-gray-800/50 transition-colors",
-                      !notification.read && "bg-primary/20",
+                      "p-3 hover:bg-gray-50 transition-colors",
+                      !notification.read && "bg-primary/5",
                     )}
                   >
                     <div className="flex gap-3">
                       {getNotificationIcon(notification.type)}
                       <div className="flex-1">
-                        <p className={cn("text-sm", !notification.read && "font-medium")}>{notification.message}</p>
-                        <p className="text-xs text-gray-400 mt-1">
+                        <p className={cn("text-sm text-gray-900", !notification.read && "font-medium")}>{notification.message}</p>
+                        <p className="text-xs text-gray-500 mt-1">
                           {notification.timestamp.toLocaleTimeString([], {
                             hour: "2-digit",
                             minute: "2-digit",
@@ -192,7 +192,7 @@ export function QuickActionsToolbar() {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-7 text-xs border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-white"
+                            className="h-7 text-xs border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
                             onClick={notification.action.onClick}
                           >
                             {notification.action.label}

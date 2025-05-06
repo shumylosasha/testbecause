@@ -20,11 +20,21 @@ import { inventoryData } from "@/data/inventory-data"
 import Link from "next/link"
 import { InventoryQuickActions } from "../components/inventory-quick-actions"
 import Image from "next/image"
+import AiInsightOverlay from "../components/AiInsightOverlay"
+
+// Define the AiInsight type locally or import if shared
+interface AiInsight {
+  items: string[];
+  reason: string;
+  trendData?: any; // Placeholder for chart data
+}
 
 export default function InventoryPage() {
   const [selectedItems, setSelectedItems] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [items, setItems] = useState(inventoryData)
+  const [isAiInsightOpen, setIsAiInsightOpen] = useState(false) // State for overlay visibility
+  const [selectedInsight, setSelectedInsight] = useState<AiInsight | null>(null) // State for insight data
 
   const filteredItems = items.filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
 
@@ -87,6 +97,18 @@ export default function InventoryPage() {
     setItems(prevItems => [...newItems, ...prevItems])
   }
 
+  // Placeholder insight data
+  const currentInsight: AiInsight = {
+    items: ["IV Catheters 20G", "Surgical Masks"],
+    reason: "based on seasonal trends and recent usage velocity.",
+    trendData: null // Placeholder for actual chart data
+  }
+
+  const handleViewInsight = () => {
+    setSelectedInsight(currentInsight); // Set the insight data
+    setIsAiInsightOpen(true);      // Open the overlay
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -101,8 +123,13 @@ export default function InventoryPage() {
             <Bot className="h-5 w-5 text-blue-600" />
             <div className="flex-1">
               <div className="flex items-center gap-3">
-                <p className="text-sm text-blue-900"><span className="font-bold text-blue-700">IV Catheters 20G</span> and <span className="font-bold text-blue-700">Surgical Masks</span> are running low and may need reordering based on seasonal trends.</p>
-                <Button variant="outline" size="sm" className="h-7 text-sm shrink-0 border-blue-300 bg-blue-100 text-blue-700 hover:bg-blue-200 hover:text-blue-900">
+                <p className="text-sm text-blue-900"><span className="font-bold text-blue-700">{currentInsight.items[0]}</span> and <span className="font-bold text-blue-700">{currentInsight.items[1]}</span> are running low and may need reordering based on seasonal trends.</p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-7 text-sm shrink-0 border-blue-300 bg-blue-100 text-blue-700 hover:bg-blue-200 hover:text-blue-900"
+                  onClick={handleViewInsight} // Attach the handler
+                >
                   View
                 </Button>
               </div>
@@ -202,12 +229,12 @@ export default function InventoryPage() {
                     <TableCell>{item.packaging}</TableCell>
                     <TableCell>{item.expiresIn}</TableCell>
                     <TableCell className="text-center">
-                      {item.swaps?.length > 0 ? (
+                      {item.vendors && item.vendors.length > 0 ? (
                         <Badge
                           variant="outline"
                           className="bg-blue-100 text-blue-800 hover:bg-blue-200 cursor-pointer"
                         >
-                          {item.swaps.length}
+                          {item.vendors.length}
                         </Badge>
                       ) : (
                         <span className="text-muted-foreground">-</span>
@@ -255,6 +282,13 @@ export default function InventoryPage() {
         selectedItemsCount={selectedItems.length}
         onCreateOrder={handleCreateOrder}
         onNewItemsAdded={handleNewItemsAdded}
+      />
+
+      {/* Render the AI Insight Overlay */}
+      <AiInsightOverlay 
+        isOpen={isAiInsightOpen}
+        onClose={() => setIsAiInsightOpen(false)}
+        insight={selectedInsight}
       />
     </div>
   )

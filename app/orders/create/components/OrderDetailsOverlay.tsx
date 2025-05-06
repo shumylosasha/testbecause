@@ -6,9 +6,12 @@ import { X, Star, StarHalf, MessageSquare, Building2, History, Package, Truck, S
 import { motion, AnimatePresence } from "framer-motion"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
-import type { InventoryItem } from "@/data/inventory-data"
+// Restore necessary imports
+// import type { InventoryItem } from "@/data/inventory-data" // Keep commented if unused
 import { ordersData, type Order } from "@/data/orders-data"
+import { type OrderItem, type Vendor } from "@/types/orders" // Import shared types
 
+// Restore local Feedback interface
 interface Feedback {
   hospitalName: string;
   rating: number;
@@ -16,69 +19,11 @@ interface Feedback {
   date: string;
 }
 
-interface Vendor {
-  id: string;
-  name: string;
-  image_url?: string;
-  pricePerUnit: number;
-  savings?: number | null;
-  manufacturer?: string;
-  compliance?: string;
-  shipping?: string;
-  packaging?: string;
-  notes?: {
-    hospitalUsage?: string;
-    stockWarning?: string;
-    recentPurchases?: string;
-  };
-  url?: string;
-  status: {
-    isCurrentVendor: boolean;
-    isSelected: boolean;
-  };
-  delivery?: string;
-  qualityRating?: number;
-  contactEmail?: string;
-  isDefault?: boolean;
-  feedback?: Feedback[];
-  price?: number;
-}
-
+// Define SelectedVendorAction locally to match CreateOrderPage
 interface SelectedVendorAction {
   itemId: string;
-  vendorId: string;
-  vendor: Vendor;
-  action: string;
-}
-
-interface BaseItem {
-  id: string;
-  name: string;
-  quantity: number;
-  unit?: string;
-  price?: number;
-  currentVendor?: string;
-  unitPrice?: number;
-  image?: string;
-  sku?: string;
-  status?: string;
-  description?: string;
-  manufacturer?: string;
-  category?: string;
-  packaging?: string;
-  currentStock?: number;
-  totalStock?: number;
-  expiresIn?: string;
-  lastPurchasePrice?: number;
-  requiredUnits?: number;
-}
-
-interface OrderItem extends BaseItem {
-  selectedVendor?: Vendor;
-  selectedVendorIds: string[];
-  selectedVendors?: Vendor[];
-  vendors: Vendor[];
-  quantity: number;
+  vendor: Vendor; // Use the imported Vendor type
+  action: 'add' | 'remove';
 }
 
 interface OrderDetailsOverlayProps {
@@ -92,7 +37,7 @@ interface OrderDetailsOverlayProps {
   renderStars: (rating: number) => React.ReactNode;
   selectedVendors?: { [key: string]: string[] };
   setSelectedVendors?: React.Dispatch<React.SetStateAction<{ [key: string]: string[] }>>;
-  setSelectedVendorActions?: React.Dispatch<React.SetStateAction<SelectedVendorAction[]>>;
+  setSelectedVendorActions?: React.Dispatch<React.SetStateAction<SelectedVendorAction[]>>; // Use the local SelectedVendorAction type
   onAddAlternativeVendor: (itemId: string, vendor: Vendor) => void;
 }
 
@@ -115,6 +60,7 @@ const OrderDetailsOverlay: React.FC<OrderDetailsOverlayProps> = ({
   const [activeTab, setActiveTab] = useState("details");
   const [expandedItems, setExpandedItems] = useState<{ [key: string]: boolean }>({});
   const [localItem, setLocalItem] = useState<OrderItem | null>(null);
+  // Restore productFeedback state
   const [productFeedback] = useState<{ [key: string]: Feedback[] }>({
     'default-feedback': [
       { hospitalName: "Dr. Smith", rating: 4.5, comment: "Excellent quality, would recommend", date: "2024-03-15" },
@@ -140,6 +86,8 @@ const OrderDetailsOverlay: React.FC<OrderDetailsOverlayProps> = ({
       }
     }));
 
+    const isNowSelected = updatedVendors.find(v => v.id === vendor.id)?.status.isSelected;
+
     setLocalItem({
       ...localItem,
       vendors: updatedVendors
@@ -152,7 +100,7 @@ const OrderDetailsOverlay: React.FC<OrderDetailsOverlayProps> = ({
           return {
             ...item,
             vendors: updatedVendors,
-            ...(updatedVendors.find(v => v.id === vendor.id)?.status.isSelected ? {
+            ...(isNowSelected ? {
               selectedVendorIds: [...new Set([...(item.selectedVendorIds || []), vendor.id])],
               selectedVendors: [...new Set([...(item.selectedVendors || []), vendor])]
             } : {
@@ -186,9 +134,8 @@ const OrderDetailsOverlay: React.FC<OrderDetailsOverlayProps> = ({
         ...prev,
         {
           itemId,
-          vendorId: vendor.id,
           vendor,
-          action: 'select'
+          action: isNowSelected ? 'add' : 'remove'
         }
       ]);
     }

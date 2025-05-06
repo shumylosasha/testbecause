@@ -65,6 +65,7 @@ export function InventoryItemQuickActions({
 }: InventoryItemQuickActionsProps) {
   const [showNotificationList, setShowNotificationList] = useState(false)
   const [showAIChat, setShowAIChat] = useState(false)
+  const [showChatHistory, setShowChatHistory] = useState(false)
   const [aiChatInput, setAIChatInput] = useState("")
   const [aiChatMessages, setAIChatMessages] = useState<
     Array<{
@@ -75,16 +76,31 @@ export function InventoryItemQuickActions({
         onClick: () => void
       }
     }>
-  >([
-    {
+  >(() => {
+    // Load chat history from localStorage on component mount
+    if (typeof window !== 'undefined') {
+      const savedChat = localStorage.getItem(`chat-history-${itemName}`)
+      if (savedChat) {
+        return JSON.parse(savedChat)
+      }
+    }
+    return [{
       role: "assistant",
       content: `Hello! I'm your procurement assistant. I can help you with ${itemName}. How can I assist you today?`,
       action: {
         label: "View Details",
         onClick: () => (window.location.href = "/"),
       },
-    },
-  ])
+    }]
+  })
+
+  // Save chat history to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`chat-history-${itemName}`, JSON.stringify(aiChatMessages))
+    }
+  }, [aiChatMessages, itemName])
+
   const [aiStatus, setAiStatus] = useState<"ok" | "attention">("ok")
   const [notifications, setNotifications] = useState<AINotification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -154,40 +170,60 @@ export function InventoryItemQuickActions({
     setAIChatMessages((prev) => [...prev, userMessage])
     setAIChatInput("")
 
-    // Simulate AI response
-    setTimeout(() => {
-      const responses = [
-        {
-          text: `I can help you find alternatives for ${itemName} that might save costs.`,
-          action: {
-            label: "Search Alternatives",
-            onClick: () => alert("Searching for alternatives..."),
-          },
-        },
-        {
-          text: `Based on your inventory data for ${itemName}, I recommend ordering more soon.`,
-          action: {
-            label: "Reorder Now",
-            onClick: () => onReorder(),
-          },
-        },
-        {
-          text: `I've analyzed market trends for ${itemName} and found potential savings.`,
-          action: {
-            label: "View Market Analysis",
-            onClick: () => alert("Viewing market analysis..."),
-          },
-        },
-      ]
-      const randomResponse = responses[Math.floor(Math.random() * responses.length)]
+    // Check if the message is about alternatives
+    const isAlternativesRequest = aiChatInput.toLowerCase().includes('alternative') || 
+                                aiChatInput.toLowerCase().includes('substitute') ||
+                                aiChatInput.toLowerCase().includes('similar') ||
+                                aiChatInput.toLowerCase().includes('compare') ||
+                                aiChatInput.toLowerCase().includes('cheaper') ||
+                                aiChatInput.toLowerCase().includes('price') ||
+                                aiChatInput.toLowerCase().includes('cost')
 
-      const aiMessage = {
-        role: "assistant" as const,
-        content: randomResponse.text,
-        action: randomResponse.action,
-      }
-      setAIChatMessages((prev) => [...prev, aiMessage])
-    }, 1000)
+    if (isAlternativesRequest) {
+      // First response with alternatives overview
+      setTimeout(() => {
+        const alternativesMessage = {
+          role: "assistant" as const,
+          content: `I've analyzed the market for ${itemName} and found several alternatives that could help reduce costs. Here are the top options:\n\n1. Generic Brand X - 15% cost savings\n2. Premium Brand Y - 8% cost savings\n3. Value Brand Z - 20% cost savings\n\nWould you like to see detailed comparisons including:\n• Price comparison\n• Quality ratings\n• Availability\n• Delivery times\n• Supplier reliability\n\nI can help you create an order with the best option.`,
+          action: {
+            label: "View Detailed Alternatives",
+            onClick: () => {
+              // Navigate to orders page with pre-selected item
+              window.location.href = `/orders/create?item=${encodeURIComponent(itemName)}&view=alternatives`
+            }
+          }
+        }
+        setAIChatMessages((prev) => [...prev, alternativesMessage])
+      }, 1000)
+    } else {
+      // Handle other types of queries
+      setTimeout(() => {
+        const responses = [
+          {
+            text: `Based on your inventory data for ${itemName}, I recommend ordering more soon.`,
+            action: {
+              label: "Reorder Now",
+              onClick: () => onReorder(),
+            },
+          },
+          {
+            text: `I've analyzed market trends for ${itemName} and found potential savings.`,
+            action: {
+              label: "View Market Analysis",
+              onClick: () => alert("Viewing market analysis..."),
+            },
+          },
+        ]
+        const randomResponse = responses[Math.floor(Math.random() * responses.length)]
+
+        const aiMessage = {
+          role: "assistant" as const,
+          content: randomResponse.text,
+          action: randomResponse.action,
+        }
+        setAIChatMessages((prev) => [...prev, aiMessage])
+      }, 1000)
+    }
   }
 
   const getAIStatusText = () => {
@@ -200,6 +236,65 @@ export function InventoryItemQuickActions({
     }
     return "All good"
   }
+
+  // Add this new component for the chat history modal
+  const ChatHistoryModal = () => (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h3 className="font-medium text-lg">Chat History - {itemName}</h3>
+          <Button variant="ghost" size="icon" onClick={() => setShowChatHistory(false)}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          {aiChatMessages.map((msg, index) => (
+            <div key={index} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} mb-4`}>
+              <div
+                className={`flex gap-2 max-w-[80%] ${msg.role === "user" ? "bg-primary text-white" : "bg-gray-100 text-gray-900"} p-3 rounded-lg`}
+              >
+                {msg.role === "assistant" && <div className="h-5 w-5 mt-0.5 shrink-0 bg-primary rounded-full"></div>}
+                <div>
+                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  {msg.role === "assistant" && msg.action && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 h-7 text-xs border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                      onClick={msg.action.onClick}
+                    >
+                      {msg.action.label}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="p-4 border-t">
+          <Button 
+            variant="outline" 
+            className="w-full"
+            onClick={() => {
+              setShowChatHistory(false)
+              setShowAIChat(true)
+            }}
+          >
+            Continue Chat
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+
+  // Add suggested questions for alternatives
+  const alternativeSuggestions = [
+    "Find cheaper alternatives",
+    "Compare prices with other vendors",
+    "Show me similar products",
+    "What are the best alternatives?",
+    "Find cost-effective substitutes"
+  ]
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
@@ -259,7 +354,17 @@ export function InventoryItemQuickActions({
       {showAIChat && (
         <div className="absolute bottom-full mb-2 w-full max-w-2xl bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
           <div className="flex items-center justify-between p-3 border-b border-gray-200">
-            <h4 className="font-medium text-gray-900">Chat with AI Assistant</h4>
+            <div className="flex items-center gap-2">
+              <h4 className="font-medium text-gray-900">Chat with AI Assistant</h4>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                className="text-xs text-gray-500 hover:text-gray-900"
+                onClick={() => setShowChatHistory(true)}
+              >
+                View History
+              </Button>
+            </div>
             <Button variant="ghost" size="icon" onClick={() => setShowAIChat(false)} className="text-gray-500 hover:bg-gray-100 hover:text-gray-900">
               <X className="h-4 w-4" />
             </Button>
@@ -305,13 +410,7 @@ export function InventoryItemQuickActions({
             <div className="mt-3 pt-3 border-t border-gray-200">
               <p className="text-xs text-gray-500 mb-2">Suggested questions:</p>
               <div className="flex flex-wrap gap-2">
-                {[
-                  "Find alternative vendors",
-                  "Analyze market trends",
-                  "Check price history",
-                  "View similar items",
-                  "Get reorder recommendations",
-                ].map((suggestion, index) => (
+                {alternativeSuggestions.map((suggestion, index) => (
                   <Button
                     key={index}
                     variant="outline"
@@ -319,6 +418,12 @@ export function InventoryItemQuickActions({
                     className="text-xs h-auto py-1 border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
                     onClick={() => {
                       setAIChatInput(suggestion)
+                      // Automatically submit the suggestion
+                      const event = new Event('submit', { bubbles: true })
+                      const form = document.querySelector('form')
+                      if (form) {
+                        form.dispatchEvent(event)
+                      }
                     }}
                   >
                     {suggestion}
@@ -329,6 +434,9 @@ export function InventoryItemQuickActions({
           </div>
         </div>
       )}
+
+      {/* Chat History Modal */}
+      {showChatHistory && <ChatHistoryModal />}
 
       {/* Quick Actions Toolbar */}
       <div className="bg-white backdrop-blur-sm border border-gray-200 rounded-full shadow-lg px-3 py-2 flex items-center gap-3">

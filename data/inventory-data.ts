@@ -36,6 +36,16 @@ export interface Vendor {
   isDefault?: boolean;
 }
 
+export interface SwapItem {
+  name: string;
+  pricePerUnit: number;
+  manufacturer: string;
+  shipping: string;
+  savings: number;
+  vendor: string;
+  compliance: string;
+}
+
 export interface InventoryItem {
   id: string;
   name: string;
@@ -55,6 +65,7 @@ export interface InventoryItem {
   vendors: Vendor[];
   selectedVendorIds: string[];
   manufacturer: string;
+  swaps?: SwapItem[];
 }
 
 export async function getInventoryData(): Promise<InventoryItem[]> {

@@ -21,6 +21,7 @@ import {
   Loader2,
   ChevronLeft,
   Mic,
+  Menu,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Progress } from "@/components/ui/progress"
@@ -59,6 +60,7 @@ export function InventoryQuickActions({
 }: InventoryQuickActionsProps) {
   const [showNotificationList, setShowNotificationList] = useState(false)
   const [showAIChat, setShowAIChat] = useState(false)
+  const [showChatHistory, setShowChatHistory] = useState(false)
   const [aiChatInput, setAIChatInput] = useState("")
   const [aiChatMessages, setAIChatMessages] = useState<
     Array<{
@@ -69,16 +71,23 @@ export function InventoryQuickActions({
         onClick: () => void
       }
     }>
-  >([
-    {
+  >(() => {
+    // Load chat history from localStorage on component mount
+    if (typeof window !== 'undefined') {
+      const savedChat = localStorage.getItem('inventory-chat-history')
+      if (savedChat) {
+        return JSON.parse(savedChat)
+      }
+    }
+    return [{
       role: "assistant",
       content: "Hello! I'm your procurement assistant. How can I help you today?",
       action: {
         label: "View Dashboard",
         onClick: () => (window.location.href = "/"),
       },
-    },
-  ])
+    }]
+  })
   const [aiStatus, setAiStatus] = useState<"ok" | "attention">("ok")
   const [notifications, setNotifications] = useState<AINotification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -601,6 +610,13 @@ export function InventoryQuickActions({
     }
   }
 
+  // Save chat history to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('inventory-chat-history', JSON.stringify(aiChatMessages))
+    }
+  }, [aiChatMessages])
+
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
       {/* Notification list with light theme */}
@@ -657,87 +673,127 @@ export function InventoryQuickActions({
 
       {/* AI Chat input with light theme */}
       {showAIChat && (
-        <div className="absolute bottom-full mb-2 w-full max-w-2xl bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
-          <div className="flex items-center justify-between p-3 border-b border-gray-200">
-            <h4 className="font-medium text-gray-900">Chat with AI Assistant</h4>
-            <Button variant="ghost" size="icon" onClick={() => setShowAIChat(false)} className="text-gray-500 hover:bg-gray-100 hover:text-gray-900">
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="p-3 max-h-[300px] overflow-y-auto">
-            {aiChatMessages.map((msg, index) => (
-              <div key={index} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} mb-2`}>
-                <div
-                  className={`flex gap-2 max-w-[80%] ${msg.role === "user" ? "bg-primary text-white" : "bg-gray-100 text-gray-900"} p-2 rounded-lg`}
-                >
-                  {msg.role === "assistant" && <div className="h-5 w-5 mt-0.5 shrink-0 bg-primary rounded-full"></div>}
-                  <div>
-                    <p className="text-sm">{msg.content}</p>
-                    {msg.role === "assistant" && msg.action && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-2 h-7 text-xs border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                        onClick={msg.action.onClick}
-                      >
-                        {msg.action.label}
-                      </Button>
-                    )}
-                  </div>
-                </div>
+        <div className={`absolute bottom-full mb-2 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden flex flex-row transition-all duration-200 ${showChatHistory ? 'w-[864px]' : 'w-[600px]'} max-w-full`}>
+          {/* Sidebar on the left */}
+          {showChatHistory && (
+            <div className="w-64 border-r border-gray-200 transition-all duration-200">
+              <div className="p-3 border-b border-gray-200">
+                <h5 className="font-medium text-sm text-gray-900">Chat History</h5>
               </div>
-            ))}
-          </div>
-          <div className="p-3 border-t border-gray-200">
-            <form onSubmit={handleAIChatSubmit} className="flex gap-2">
-              <div className="flex-1 flex gap-2">
-                <Input
-                  value={aiChatInput}
-                  onChange={(e) => setAIChatInput(e.target.value)}
-                  placeholder="Ask a question..."
-                  className="flex-1 bg-white border-gray-200 text-gray-900 placeholder-gray-500 focus:border-primary"
-                />
+              <div className="h-[300px] overflow-y-auto">
+                {aiChatMessages.map((msg, index) => (
+                  <div 
+                    key={index} 
+                    className={`p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${
+                      index === aiChatMessages.length - 1 ? 'bg-gray-50' : ''
+                    }`}
+                    onClick={() => setShowChatHistory(false)}
+                  >
+                    <div className="flex items-start gap-2">
+                      <div className="h-5 w-5 mt-0.5 shrink-0 bg-primary rounded-full"></div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-900 truncate">{msg.content}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {msg.role === "user" ? "You" : "AI Assistant"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Main Chat Area always fixed width, always last */}
+          <div className="w-[600px] flex flex-col">
+            <div className="flex items-center justify-between p-3 border-b border-gray-200">
+              <div className="flex items-center gap-2">
+                <h4 className="font-medium text-gray-900">Chat with AI Assistant</h4>
                 <Button 
-                  type="button" 
-                  size="icon" 
-                  variant="ghost"
-                  className="h-10 w-10 shrink-0 text-gray-500 hover:text-gray-900 hover:bg-gray-100"
-                  onClick={() => {
-                    // TODO: Implement voice input
-                    console.log("Voice input clicked")
-                  }}
+                  variant="ghost" 
+                  size="icon"
+                  className="h-8 w-8 text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+                  onClick={() => setShowChatHistory(!showChatHistory)}
                 >
-                  <Mic className="h-4 w-4" />
+                  <Menu className="h-4 w-4" />
                 </Button>
               </div>
-              <Button type="submit" size="sm" className="bg-primary text-white hover:bg-primary/90">
-                Send
+              <Button variant="ghost" size="icon" onClick={() => setShowAIChat(false)} className="text-gray-500 hover:bg-gray-100 hover:text-gray-900">
+                <X className="h-4 w-4" />
               </Button>
-            </form>
-
-            {/* Suggestions with light theme */}
-            <div className="mt-3 pt-3 border-t border-gray-200">
-              <p className="text-xs text-gray-500 mb-2">Suggested questions:</p>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  "Which items are running low?",
-                  "Find cost-saving opportunities",
-                  "Suggest alternative vendors",
-                  "Analyze inventory trends",
-                  "Optimize reorder points",
-                ].map((suggestion, index) => (
-                  <Button
-                    key={index}
-                    variant="outline"
-                    size="sm"
-                    className="text-xs h-auto py-1 border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+            </div>
+            <div className="p-3 max-h-[300px] overflow-y-auto">
+              {aiChatMessages.map((msg, index) => (
+                <div key={index} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} mb-2`}>
+                  <div
+                    className={`flex gap-2 max-w-[80%] ${msg.role === "user" ? "bg-primary text-white" : "bg-gray-100 text-gray-900"} p-2 rounded-lg`}
+                  >
+                    {msg.role === "assistant" && <div className="h-5 w-5 mt-0.5 shrink-0 bg-primary rounded-full"></div>}
+                    <div>
+                      <p className="text-sm">{msg.content}</p>
+                      {msg.role === "assistant" && msg.action && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 h-7 text-xs border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                          onClick={msg.action.onClick}
+                        >
+                          {msg.action.label}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="p-3 border-t border-gray-200">
+              <form onSubmit={handleAIChatSubmit} className="flex gap-2">
+                <div className="flex-1 flex gap-2">
+                  <Input
+                    value={aiChatInput}
+                    onChange={(e) => setAIChatInput(e.target.value)}
+                    placeholder="Ask a question..."
+                    className="flex-1 bg-white border-gray-200 text-gray-900 placeholder-gray-500 focus:border-primary"
+                  />
+                  <Button 
+                    type="button" 
+                    size="icon" 
+                    variant="ghost"
+                    className="h-10 w-10 shrink-0 text-gray-500 hover:text-gray-900 hover:bg-gray-100"
                     onClick={() => {
-                      setAIChatInput(suggestion)
+                      // TODO: Implement voice input
+                      console.log("Voice input clicked")
                     }}
                   >
-                    {suggestion}
+                    <Mic className="h-4 w-4" />
                   </Button>
-                ))}
+                </div>
+                <Button type="submit" size="sm" className="bg-primary text-white hover:bg-primary/90">
+                  Send
+                </Button>
+              </form>
+
+              {/* Suggestions with light theme */}
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <p className="text-xs text-gray-500 mb-2">Suggested questions:</p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    "Which items are running low?",
+                    "Find cost-saving opportunities",
+                    "Suggest alternative vendors",
+                  ].map((suggestion, index) => (
+                    <Button
+                      key={index}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-auto py-1 border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                      onClick={() => {
+                        setAIChatInput(suggestion)
+                      }}
+                    >
+                      {suggestion}
+                    </Button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -785,6 +841,7 @@ export function InventoryQuickActions({
             onClick={() => {
               setShowAIChat(!showAIChat)
               setShowNotificationList(false)
+              setShowChatHistory(false)
             }}
             disabled={uploadStatus !== "idle" && uploadStatus !== "ready" && uploadStatus !== "complete"}
           >

@@ -48,6 +48,9 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  ScatterChart,
+  Scatter,
+  ZAxis,
 } from "recharts"
 import {
   Dialog,
@@ -65,6 +68,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { departmentData, productData, surgeonData, calculateDifference, getComparisonColor } from "../data/comparison-data"
+import ShortageItems from './components/shortage-items'
+import PartnershipMap from './components/partnership-map'
 
 // Mock data for opportunity reports
 const opportunityReports = [
@@ -347,6 +352,23 @@ const totalOpportunities = opportunityReports.length
 const highPriorityRisks = riskWarnings.filter((r) => r.severity === "High").length
 const potentialSavings = opportunityReports.reduce((acc, curr) => acc + curr.potentialSavings, 0)
 
+// Mock data for bubble maps
+const hospitalTradingData = [
+  { name: "Hospital A", x: 100, y: 100, z: 30, color: "#8884d8" },
+  { name: "Hospital B", x: 80, y: 80, z: 25, color: "#83a6ed" },
+  { name: "Hospital C", x: 60, y: 60, z: 20, color: "#8dd1e1" },
+  { name: "Hospital D", x: 40, y: 40, z: 15, color: "#82ca9d" },
+  { name: "Hospital E", x: 20, y: 20, z: 10, color: "#a4de6c" },
+]
+
+const productDistributionData = [
+  { name: "Surgical Gloves", x: 120, y: 120, z: 35, color: "#ff6b6b", shortage: -45 },
+  { name: "Face Masks", x: 90, y: 90, z: 30, color: "#4ecdc4", surplus: 35 },
+  { name: "Syringes", x: 75, y: 75, z: 25, color: "#45b7d1", shortage: -20 },
+  { name: "Bandages", x: 60, y: 60, z: 20, color: "#96ceb4", surplus: 15 },
+  { name: "IV Bags", x: 45, y: 45, z: 15, color: "#ffd93d", shortage: -10 },
+]
+
 export default function ReportsPage() {
   const [selectedReport, setSelectedReport] = useState<string | null>(null)
   const [selectedRecommendations, setSelectedRecommendations] = useState<string[]>([])
@@ -478,6 +500,26 @@ export default function ReportsPage() {
               }`}
             >
               Compare
+            </button>
+            <button
+              onClick={() => setActiveTab("shortages")}
+              className={`pb-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === "shortages"
+                  ? "border-black text-black"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              Shortages
+            </button>
+            <button
+              onClick={() => setActiveTab("partnerships")}
+              className={`pb-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === "partnerships"
+                  ? "border-black text-black"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              Partnerships
             </button>
           </nav>
         </div>
@@ -1285,6 +1327,14 @@ export default function ReportsPage() {
                 </>
               )}
             </>
+          )}
+
+          {activeTab === "shortages" && (
+            <ShortageItems />
+          )}
+
+          {activeTab === "partnerships" && (
+            <PartnershipMap />
           )}
         </div>
       </div>

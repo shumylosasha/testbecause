@@ -122,16 +122,6 @@ interface BaseItem {
   requiredUnits?: number;
 }
 
-interface OrderItem extends OrderItem {
-  selectedVendor?: Vendor;
-  selectedVendorIds: string[];
-  selectedVendors?: Vendor[];
-  vendors: Vendor[];
-  quantity: number;
-  unit: string;
-  price: number;
-}
-
 const VENDOR_LOGOS = {
   "MedSupply Inc.": "https://medsupplyinc.com/images/medsupply-logo-min.png",
   "Hospital Direct": "https://www.hospitaldirect.co.uk/wp-content/uploads/2022/11/hlogo-300x225.png",
@@ -443,6 +433,8 @@ export default function CreateOrderPage() {
       const newItem: OrderItem = {
         ...item, // Spread InventoryItem props
         quantity: 1, // Add quantity explicitly
+        unit: 'units', // Set default unit
+        price: item.unitPrice || 0, // Use unitPrice from InventoryItem for price
         vendors: item.vendors.map(v => ({ // Map vendors with status
           ...v,
           status: {
@@ -849,6 +841,8 @@ export default function CreateOrderPage() {
       return {
         ...item, // Spread InventoryItem
         quantity: 1,
+        unit: 'units', // Set default unit
+        price: item.unitPrice || 0, // Use unitPrice from InventoryItem for price
         vendors: item.vendors.map(v => ({ // Map vendors with status
           ...v,
           status: {
@@ -1692,633 +1686,471 @@ export default function CreateOrderPage() {
                 {/* Order Summary, Budget, Combine Order, and AI Insights Sections */}
                 {selectedItems.length > 0 && (
                   <div className="space-y-4">
-                    {/* Budget and Combine Order in a two-column layout */}
-                    <div className="grid grid-cols-2 gap-4">
-                      {/* Budget Section */}
-                      <Card className="overflow-hidden">
-                        <CardHeader className="border-b py-3 px-4 flex flex-row items-center justify-between" 
-                          onClick={() => setExpandedBudget(!expandedBudget)}
-                          style={{ cursor: 'pointer' }}>
-                          <div className="flex items-center gap-2">
-                            <DollarSign className="h-4 w-4 text-muted-foreground" />
-                            <CardTitle className="text-base font-medium">Budget</CardTitle>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {/* Always visible budget summary */}
-                            <div className="flex items-center gap-1 mr-2">
-                              <span className="text-xs font-medium">
-                                {selectedDepartment === "surgery" && (
-                                  calculateTotal() > 10000 ? 
-                                  <Badge variant="destructive" className="text-xs">Exceeds Limit</Badge> : 
-                                  <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">Within Budget</Badge>
-                                )}
-                                {selectedDepartment === "emergency" && (
-                                  calculateTotal() > 15000 ? 
-                                  <Badge variant="destructive" className="text-xs">Exceeds Limit</Badge> : 
-                                  <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">Within Budget</Badge>
-                                )}
-                              </span>
-                          </div>
-                          <Badge variant="outline" className="text-xs font-normal">Q1 2024</Badge>
-                            <ChevronDown className={`h-4 w-4 transition-transform ${expandedBudget ? 'rotate-180' : ''}`} />
-                          </div>
-                        </CardHeader>
-                        
-                        {expandedBudget && (
-                        <CardContent className="p-4 space-y-6">
-                            {/* Department Budget Section */}
-                            <div className="space-y-3">
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm text-muted-foreground">Department</span>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" size="sm" className="h-7">
-                                      {selectedDepartment === "surgery" && "Surgery"}
-                                      {selectedDepartment === "emergency" && "Emergency"}
-                                      {selectedDepartment === "cardiology" && "Cardiology"}
-                                      {selectedDepartment === "radiology" && "Radiology"}
-                                      {selectedDepartment === "neurology" && "Neurology"}
-                                      {selectedDepartment === "pediatrics" && "Pediatrics"}
-                                      {selectedDepartment === "laboratory" && "Laboratory"}
-                                      {selectedDepartment === "it" && "IT Department"}
-                                      {selectedDepartment === "general" && "General Supplies"}
-                                      <ChevronDown className="ml-2 h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent>
-                                    <DropdownMenuRadioGroup value={selectedDepartment} onValueChange={setSelectedDepartment}>
-                                      <DropdownMenuRadioItem value="surgery">Surgery</DropdownMenuRadioItem>
-                                      <DropdownMenuRadioItem value="emergency">Emergency</DropdownMenuRadioItem>
-                                      <DropdownMenuRadioItem value="cardiology">Cardiology</DropdownMenuRadioItem>
-                                      <DropdownMenuRadioItem value="radiology">Radiology</DropdownMenuRadioItem>
-                                      <DropdownMenuRadioItem value="neurology">Neurology</DropdownMenuRadioItem>
-                                      <DropdownMenuRadioItem value="pediatrics">Pediatrics</DropdownMenuRadioItem>
-                                      <DropdownMenuRadioItem value="laboratory">Laboratory</DropdownMenuRadioItem>
-                                      <DropdownMenuRadioItem value="it">IT Department</DropdownMenuRadioItem>
-                                      <DropdownMenuRadioItem value="general">General Supplies</DropdownMenuRadioItem>
-                                    </DropdownMenuRadioGroup>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            </div>
-
-                          {/* Available Budget */}
-                          <div className="space-y-3">
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm text-muted-foreground">Annual Budget</span>
-                                <span className="text-sm font-medium">
-                                  ${selectedDepartment === "surgery" ? "275,000" : 
-                                     selectedDepartment === "emergency" ? "320,000" : "150,000"}
-                                </span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm text-muted-foreground">Q1 Budget</span>
-                                <span className="text-sm font-medium">
-                                  ${selectedDepartment === "surgery" ? "75,000" : 
-                                     selectedDepartment === "emergency" ? "85,000" : "40,000"}
-                                </span>
-                              </div>
-                              {/* <div className="flex justify-between items-center">
-                                <span className="text-sm text-muted-foreground">Already Spent</span>
-                                <span className="text-sm font-medium">
-                                  ${selectedDepartment === "surgery" ? "35,000" : 
-                                     selectedDepartment === "emergency" ? "42,000" : "17,500"}
-                                </span>
-                              </div> */}
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm text-muted-foreground">Available Budget</span>
-                                <span className="text-sm font-medium">
-                                  ${selectedDepartment === "surgery" ? "40,000" : 
-                                     selectedDepartment === "emergency" ? "43,000" : "22,500"}
-                                </span>
-                            </div>
-                            <div className="relative w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                              <div className="absolute inset-0 w-full h-full">
-                                <div 
-                                  className="h-full bg-black rounded-full"
-                                    style={{ width: selectedDepartment === "surgery" ? '46.6%' : 
-                                                   selectedDepartment === "emergency" ? '49.4%' : '43.8%' }}
-                                >
-                                  <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-white font-medium">
-                                      {selectedDepartment === "surgery" ? '46.6%' : 
-                                       selectedDepartment === "emergency" ? '49.4%' : '43.8%'} Used
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex justify-between text-xs text-muted-foreground">
-                                <span>Spent: ${selectedDepartment === "surgery" ? "35,000" : 
-                                              selectedDepartment === "emergency" ? "42,000" : "17,500"}</span>
-                                <span>Total: ${selectedDepartment === "surgery" ? "75,000" : 
-                                              selectedDepartment === "emergency" ? "85,000" : "40,000"}</span>
-                            </div>
-                          </div>
-
-                          {/* This Order */}
-                          <div className="space-y-3">
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm text-muted-foreground">This Order</span>
-                                <span className="text-sm font-medium">$~10000</span>
-                            </div>
-                            <div className="relative w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                              <div 
-                                  className={`h-full rounded-full ${
-                                    selectedDepartment === "surgery" && calculateTotal() > 10000 ? "bg-red-500" :
-                                    selectedDepartment === "emergency" && calculateTotal() > 15000 ? "bg-red-500" :
-                                    "bg-blue-500"
-                                  }`}
-                                  style={{ width: `${Math.min(100, (calculateTotal() / (selectedDepartment === "surgery" ? 75000 : selectedDepartment === "emergency" ? 85000 : 40000)) * 100)}%` }}
-                              >
-                                <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-white font-medium">
-                                    {((calculateTotal() / (selectedDepartment === "surgery" ? 75000 : selectedDepartment === "emergency" ? 85000 : 40000)) * 100).toFixed(1)}% of Budget
-                                </span>
-                              </div>
-                            </div>
-                            </div>
-
-                            {/* Budget Forecast */}
-                            <div className="space-y-3">
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium">Budget Forecast</span>
-                                <span className="text-xs text-muted-foreground">After this order</span>
-                          </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm text-muted-foreground">Remaining Q1 Budget</span>
-                                <span className="text-sm font-medium">
-                                  ${(
-                                    (selectedDepartment === "surgery" ? 40000 : 
-                                    selectedDepartment === "emergency" ? 43000 : 22500) - calculateTotal()
-                                  ).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                                </span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm text-muted-foreground">Q1 Budget Status</span>
-                                <div>
-                                  {selectedDepartment === "surgery" && calculateTotal() > 10000 ? (
-                                    <Badge variant="destructive">Requires Approval</Badge>
-                                  ) : selectedDepartment === "emergency" && calculateTotal() > 15000 ? (
-                                    <Badge variant="destructive">Requires Approval</Badge>
-                                  ) : (
-                                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                      Within Limits
-                                    </Badge>
-                                  )}
-                                </div>
-                              </div>
-                              {(selectedDepartment === "surgery" && calculateTotal() > 10000) || 
-                               (selectedDepartment === "emergency" && calculateTotal() > 15000) ? (
-                                <div className="bg-amber-50 p-3 rounded-md border border-amber-200">
-                                  <div className="flex items-start gap-2">
-                                    <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5" />
-                                    <div>
-                                      <p className="text-sm font-medium text-amber-800">Approval Required</p>
-                                      <p className="text-xs text-amber-700 mt-1">
-                                        This order exceeds the departmental single-order limit of ${selectedDepartment === "surgery" ? "10,000" : "15,000"}.
-                                        Additional approval from the {selectedDepartment === "surgery" ? "Surgical" : "Emergency"} Department Head is required.
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-                              ) : null}
-                              
-                              {/* Projected Spend Chart */}
-                              <div className="pt-2">
-                                <div className="text-xs font-medium text-muted-foreground pb-2">Projected Q1 Spend</div>
-                                <div className="w-full h-8 bg-gray-100 rounded overflow-hidden relative">
-                                  {/* Already spent */}
-                                  <div 
-                                    className="absolute h-full bg-gray-600" 
-                                    style={{ 
-                                      width: `${(selectedDepartment === "surgery" ? 35000 : 
-                                              selectedDepartment === "emergency" ? 42000 : 17500) / 
-                                             (selectedDepartment === "surgery" ? 75000 : 
-                                              selectedDepartment === "emergency" ? 85000 : 40000) * 100}%` 
-                                    }}
-                                  >
-                                    <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-[10px] text-white font-medium">
-                                      Spent
-                                    </span>
-                                  </div>
-                                  {/* This order */}
-                                  <div 
-                                    className="absolute h-full bg-blue-500" 
-                                    style={{ 
-                                      left: `${(selectedDepartment === "surgery" ? 35000 : 
-                                              selectedDepartment === "emergency" ? 42000 : 17500) / 
-                                             (selectedDepartment === "surgery" ? 75000 : 
-                                              selectedDepartment === "emergency" ? 85000 : 40000) * 100}%`,
-                                      width: `${Math.min(
-                                        100 - ((selectedDepartment === "surgery" ? 35000 : 
-                                                selectedDepartment === "emergency" ? 42000 : 17500) / 
-                                               (selectedDepartment === "surgery" ? 75000 : 
-                                                selectedDepartment === "emergency" ? 85000 : 40000) * 100),
-                                        (calculateTotal() / 
-                                         (selectedDepartment === "surgery" ? 75000 : 
-                                          selectedDepartment === "emergency" ? 85000 : 40000) * 100)
-                                      )}%` 
-                                    }}
-                                  >
-                                    <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-[10px] text-white font-medium">
-                                      Current Order
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
-                                  <span>0%</span>
-                                  <span>25%</span>
-                                  <span>50%</span>
-                                  <span>75%</span>
-                                  <span>100%</span>
-                                </div>
-                              </div>
-                          </div>
-                        </CardContent>
-                        )}
-
-                        {!expandedBudget && (
-                          <CardContent className="p-4">
-                            <div className="flex justify-between items-center">
-                              <div className="flex flex-col">
-                                <span className="text-sm text-muted-foreground">Available Budget</span>
-                                <span className="text-sm font-medium">
-                                  ${selectedDepartment === "surgery" ? "40,000" : 
-                                     selectedDepartment === "emergency" ? "43,000" : "22,500"}
-                                </span>
-                              </div>
-                              <div className="flex flex-col items-end">
-                                <span className="text-sm text-muted-foreground">This Order</span>
-                                <span className="text-sm font-medium">~$10,000</span>
-                              </div>
-                            </div>
-                            
-                            {(selectedDepartment === "surgery" && calculateTotal() > 10000) || 
-                             (selectedDepartment === "emergency" && calculateTotal() > 15000) ? (
-                              <div className="mt-3 flex items-center gap-2">
-                                <AlertCircle className="h-4 w-4 text-amber-500" />
-                                <span className="text-xs text-amber-700">Approval required</span>
-                              </div>
-                            ) : null}
-                          </CardContent>
-                        )}
-                      </Card>
-
-                      {/* Combine Order Section */}
-                      <Card className="overflow-hidden">
-                        <CardHeader className="border-b py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            <Truck className="h-5 w-5 text-muted-foreground" />
-                            <CardTitle className="text-base font-medium">Combine Order</CardTitle>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="p-6">
-                          <div className="flex items-start justify-between">
-                            <div className="max-w-[70%]">
-                              <p className="text-gray-600 mb-6 text-sm">
-                                Current order fills 40% of a standard truck - find a partner to optimize costs and get bulk discounts.
-                              </p>
-                              
-                              <Button 
-                                variant="outline" 
-                                size="default"
-                                className="border border-gray-200 gap-2"
-                              >
-                                <Users className="h-4 w-4" />
-                                Find Partner
-                              </Button>
-                            </div>
-                            
-                            <div className="flex flex-col items-center justify-center">
-                              <div className="w-16 h-24 bg-blue-50 rounded-md overflow-hidden relative border-2 border-blue-300">
-                                <div 
-                                  className="absolute bottom-0 w-full bg-blue-500" 
-                                  style={{ height: '40%' }}
-                                ></div>
-                              </div>
-                              <span className="text-lg font-medium mt-2">40%</span>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-
-                    {/* AI Insights Section */}
+                    {/* Unified Insights Card */}
                     <Card className="overflow-hidden">
-                      <CardHeader onClick={() => setExpandedAIInsights(!expandedAIInsights)} className="border-b py-3 px-4 cursor-pointer">
+                      <CardHeader 
+                        className="border-b py-3 px-4 cursor-pointer" 
+                        onClick={() => setExpandedAIInsights(!expandedAIInsights)}
+                      >
                         <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Sparkles className="h-5 w-5 text-muted-foreground" />
-                          <CardTitle className="text-base font-medium">AI Insights</CardTitle>
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="h-5 w-5 text-muted-foreground" />
+                            <CardTitle className="text-base font-medium">Order Insights</CardTitle>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">5 insights</Badge>
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">3 sections</Badge>
                             <ChevronDown 
                               className={`h-4 w-4 transition-transform duration-200 ${
-                                expandedAIInsights ? 'rotate-0' : '-rotate-90'
+                                expandedAIInsights ? 'rotate-180' : ''
                               }`}
                             />
                           </div>
                         </div>
                       </CardHeader>
                       {expandedAIInsights && (
-                      <CardContent className="p-0">
-                          <div className="p-6 space-y-8">
-                            {/* Message 1: Budget limit */}
-                            <div>
-                              <div className="flex items-start gap-2 mb-4 bg-blue-50 p-3 rounded-md border border-blue-100">
-                            <Sparkles className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                            <span className="text-blue-700 font-medium">
-                              Items nearing budget limit for Surgery Department:
-                            </span>
-                          </div>
-                          
-                          <div className="space-y-3">
-                            {/* Item 1 */}
-                                <div className="flex justify-between items-center bg-gray-50 p-4 rounded border border-gray-200">
-                              <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded bg-white flex items-center justify-center flex-shrink-0">
-                                  <img src="/placeholder.svg" alt="Product" className="max-w-full max-h-full" />
-                                </div>
-                                    <div>
-                                      <span className="font-medium block">Surgical Gloves (Latex-free)</span>
-                                      <span className="text-sm text-blue-700 font-medium">$1,200</span>
-                              </div>
-                                  </div>
-                                <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    className="bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-gray-800"
-                                >
-                                    View
-                                </Button>
-                            </div>
-                            
-                            {/* Item 2 */}
-                                <div className="flex justify-between items-center bg-gray-50 p-4 rounded border border-gray-200">
-                              <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded bg-white flex items-center justify-center flex-shrink-0">
-                                  <img src="/placeholder.svg" alt="Product" className="max-w-full max-h-full" />
-                                </div>
-                                    <div>
-                                      <span className="font-medium block">Surgical Masks (N95)</span>
-                                      <span className="text-sm text-blue-700 font-medium">$800</span>
-                              </div>
-                                  </div>
-                                <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    className="bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-gray-800"
-                                >
-                                    View
-                                </Button>
-                            </div>
-                            
-                            {/* Item 3 */}
-                                <div className="flex justify-between items-center bg-gray-50 p-4 rounded border border-gray-200">
-                              <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded bg-white flex items-center justify-center flex-shrink-0">
-                                  <img src="/placeholder.svg" alt="Product" className="max-w-full max-h-full" />
-                                </div>
-                                    <div>
-                                      <span className="font-medium block">Surgical Gowns (Disposable)</span>
-                                      <span className="text-sm text-blue-700 font-medium">$950</span>
-                              </div>
-                                  </div>
-                                <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    className="bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-gray-800"
-                                >
-                                    View
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                          
-                            <Separator />
-                            
-                            {/* Message 2: Combining vendors */}
-                            <div>
-                              <div className="flex items-start gap-2 mb-4 bg-green-50 p-3 rounded-md border border-green-100">
-                                <Sparkles className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                                <div className="flex-1">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-green-700 font-medium">
-                                      Optimize shipping by combining vendors for these items:
-                                    </span>
-                                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">2 items</Badge>
-                                  </div>
-                                </div>
+                        <CardContent className="p-0">
+                          <div className="grid grid-cols-3 divide-x">
+                            {/* Budget Section */}
+                            <div className="p-6">
+                              <div className="flex items-center gap-2 mb-4">
+                                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                                <h3 className="font-medium">Budget</h3>
                               </div>
                               
-                              <div className="space-y-3">
-                                {/* Item 1 */}
-                                <div className="flex justify-between items-center bg-gray-50 p-4 rounded border border-gray-200">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded bg-white flex items-center justify-center flex-shrink-0">
-                                      <img src="/placeholder.svg" alt="Product" className="max-w-full max-h-full" />
-                                    </div>
-                                    <div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-medium">IV Catheters (18G)</span>
-                                        <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Same vendor available</Badge>
-                                      </div>
-                                      <span className="text-sm text-green-700 font-medium">MedLine ($720) → MediSupply ($680)</span>
-                                    </div>
-                                  </div>
-                            <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    className="bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-gray-800"
-                            >
-                                    View
-                            </Button>
+                              <div className="space-y-4">
+                                {/* Department Selection */}
+                                <div>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="outline" size="sm" className="w-full justify-start">
+                                        {selectedDepartment === "surgery" && "Surgery"}
+                                        {selectedDepartment === "emergency" && "Emergency"}
+                                        {selectedDepartment === "cardiology" && "Cardiology"}
+                                        {selectedDepartment === "radiology" && "Radiology"}
+                                        {selectedDepartment === "neurology" && "Neurology"}
+                                        {selectedDepartment === "pediatrics" && "Pediatrics"}
+                                        {selectedDepartment === "laboratory" && "Laboratory"}
+                                        {selectedDepartment === "it" && "IT Department"}
+                                        {selectedDepartment === "general" && "General Supplies"}
+                                        <ChevronDown className="ml-2 h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent>
+                                      <DropdownMenuRadioGroup value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                                        <DropdownMenuRadioItem value="surgery">Surgery</DropdownMenuRadioItem>
+                                        <DropdownMenuRadioItem value="emergency">Emergency</DropdownMenuRadioItem>
+                                        <DropdownMenuRadioItem value="cardiology">Cardiology</DropdownMenuRadioItem>
+                                        <DropdownMenuRadioItem value="radiology">Radiology</DropdownMenuRadioItem>
+                                        <DropdownMenuRadioItem value="neurology">Neurology</DropdownMenuRadioItem>
+                                        <DropdownMenuRadioItem value="pediatrics">Pediatrics</DropdownMenuRadioItem>
+                                        <DropdownMenuRadioItem value="laboratory">Laboratory</DropdownMenuRadioItem>
+                                        <DropdownMenuRadioItem value="it">IT Department</DropdownMenuRadioItem>
+                                        <DropdownMenuRadioItem value="general">General Supplies</DropdownMenuRadioItem>
+                                      </DropdownMenuRadioGroup>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
                                 </div>
-                                
-                                {/* Item 2 */}
-                                <div className="flex justify-between items-center bg-gray-50 p-4 rounded border border-gray-200">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded bg-white flex items-center justify-center flex-shrink-0">
-                                      <img src="/placeholder.svg" alt="Product" className="max-w-full max-h-full" />
-                                    </div>
-                                    <div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-medium">Infusion Pump Tubing</span>
-                                        <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Same vendor available</Badge>
-                                      </div>
-                                      <span className="text-sm text-green-700 font-medium">BD Medical ($550) → MediSupply ($565)</span>
-                                    </div>
-                                  </div>
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    className="bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-gray-800"
-                                  >
-                                    View
-                                  </Button>
-                                </div>
-                              </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                      )}
-                    </Card>
 
-                    {/* Order Summary Card - Moved to bottom */}
-                    <Card>
-                      <CardHeader className="border-b bg-muted/30 py-4 px-6">
-                        <div className="flex items-center gap-3">
-                          <ClipboardList className="h-5 w-5 text-muted-foreground" />
-                          <CardTitle className="text-lg">Order Summary</CardTitle>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="p-6">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                          {/* Left Column - Order Details (larger, spans 2 columns) */}
-                          <div className="md:col-span-2">
-                            {/* Section 1: Order Dates */}
-                            <div className="mb-6">
-                              <h3 className="text-base font-semibold mb-4">Dates</h3>
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <span className="text-muted-foreground mb-1 block">Issue Date</span>
-                                  <Input
-                                    type="date"
-                                    value={issueDate}
-                                    onChange={(e) => setIssueDate(e.target.value)}
-                                    className="h-10 text-base px-3"
-                                  />
+                                {/* Budget Summary */}
+                                <div className="space-y-2">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-sm text-muted-foreground">Available Budget</span>
+                                    <span className="text-sm font-medium">
+                                      ${selectedDepartment === "surgery" ? "40,000" : 
+                                         selectedDepartment === "emergency" ? "43,000" : "22,500"}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-sm text-muted-foreground">This Order</span>
+                                    <span className="text-sm font-medium">~$10,000</span>
+                                  </div>
+                                  <div className="relative w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                                    <div 
+                                      className={`h-full rounded-full ${
+                                        selectedDepartment === "surgery" && calculateTotal() > 10000 ? "bg-red-500" :
+                                        selectedDepartment === "emergency" && calculateTotal() > 15000 ? "bg-red-500" :
+                                        "bg-blue-500"
+                                      }`}
+                                      style={{ width: `${Math.min(100, (calculateTotal() / (selectedDepartment === "surgery" ? 75000 : selectedDepartment === "emergency" ? 85000 : 40000)) * 100)}%` }}
+                                    >
+                                      <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-white font-medium">
+                                        {((calculateTotal() / (selectedDepartment === "surgery" ? 75000 : selectedDepartment === "emergency" ? 85000 : 40000)) * 100).toFixed(1)}% of Budget
+                                      </span>
+                                    </div>
+                                  </div>
                                 </div>
-                                <div>
-                                  <span className="text-muted-foreground mb-1 block">Due Date</span>
-                                  <Input
-                                    type="date"
-                                    value={dueDate}
-                                    onChange={(e) => setDueDate(e.target.value)}
-                                    className="h-10 text-base px-3"
-                                  />
-                                </div>
+
+                                {/* Budget Status */}
+                                {(selectedDepartment === "surgery" && calculateTotal() > 10000) || 
+                                 (selectedDepartment === "emergency" && calculateTotal() > 15000) ? (
+                                  <div className="bg-amber-50 p-3 rounded-md border border-amber-200">
+                                    <div className="flex items-start gap-2">
+                                      <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5" />
+                                      <div>
+                                        <p className="text-sm font-medium text-amber-800">Approval Required</p>
+                                        <p className="text-xs text-amber-700 mt-1">
+                                          This order exceeds the departmental single-order limit.
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : null}
                               </div>
                             </div>
-                            
-                            <Separator className="my-6" />
-                            
-                            {/* Department Selection */}
-                            <div className="mb-6">
-                              <h3 className="text-base font-semibold mb-4">Department</h3>
-                              <div className="flex flex-col gap-1.5">
-                                <span className="text-muted-foreground text-sm">Select department this order belongs to</span>
-                                <Select 
-                                  defaultValue="surgery" 
-                                  value={selectedDepartment}
-                                  onValueChange={(value) => setSelectedDepartment(value)}
+
+                            {/* Combine Order Section */}
+                            <div className="p-6">
+                              <div className="flex items-center gap-2 mb-4">
+                                <Truck className="h-4 w-4 text-muted-foreground" />
+                                <h3 className="font-medium">Combine Order</h3>
+                              </div>
+                              
+                              <div className="space-y-4">
+                                <p className="text-sm text-muted-foreground">
+                                  Current order fills 40% of a standard truck - find a partner to optimize costs and get bulk discounts.
+                                </p>
+                                
+                                <div className="flex items-center justify-center">
+                                  <div className="w-16 h-24 bg-blue-50 rounded-md overflow-hidden relative border-2 border-blue-300">
+                                    <div 
+                                      className="absolute bottom-0 w-full bg-blue-500" 
+                                      style={{ height: '40%' }}
+                                    ></div>
+                                  </div>
+                                  <span className="text-lg font-medium ml-4">40%</span>
+                                </div>
+
+                                <Button 
+                                  variant="outline" 
+                                  size="default"
+                                  className="w-full border border-gray-200 gap-2"
                                 >
-                                  <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Select department" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="surgery">Surgery Department</SelectItem>
-                                    <SelectItem value="emergency">Emergency Department</SelectItem>
-                                    <SelectItem value="cardiology">Cardiology Department</SelectItem>
-                                    <SelectItem value="radiology">Radiology Department</SelectItem>
-                                    <SelectItem value="neurology">Neurology Department</SelectItem>
-                                    <SelectItem value="pediatrics">Pediatrics Department</SelectItem>
-                                    <SelectItem value="laboratory">Laboratory</SelectItem>
-                                    <SelectItem value="it">IT Department</SelectItem>
-                                    <SelectItem value="general">General Supplies</SelectItem>
-                                  </SelectContent>
-                                </Select>
+                                  <Users className="h-4 w-4" />
+                                  Find Partner
+                                </Button>
                               </div>
                             </div>
-                            
-                            <Separator className="my-6" />
-                            
-                            {/* Section 2: Order Items Summary */}
-                            <div className="mb-6">
-                              <h3 className="text-base font-semibold mb-4">Items Summary</h3>
-                              <div className="space-y-2 text-base">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-muted-foreground">Items</span>
-                                  <span className="font-medium">{selectedItems.length}</span>
+
+                            {/* AI Insights Section */}
+                            <div className="p-6">
+                              <div className="flex items-center gap-2 mb-4">
+                                <Sparkles className="h-4 w-4 text-muted-foreground" />
+                                <h3 className="font-medium">AI Insights</h3>
+                              </div>
+                              
+                              <div className="space-y-4">
+                                {/* Budget Alert */}
+                                <div className="bg-blue-50 p-3 rounded-md border border-blue-100">
+                                  <div className="flex items-start gap-2">
+                                    <Sparkles className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                                    <div className="flex-1">
+                                      <div className="flex items-center justify-between">
+                                        <p className="text-sm font-medium text-blue-800">Budget Optimization</p>
+                                        <Button variant="ghost" size="sm" className="h-7 px-2">
+                                          <ArrowUpDown className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                      <p className="text-xs text-blue-700 mt-1">
+                                        Consider combining orders with Emergency Department to reach bulk discount thresholds.
+                                      </p>
+                                    </div>
+                                  </div>
                                 </div>
-                                <div className="flex justify-between items-center">
-                                  <span className="text-muted-foreground">Total Units</span>
-                                  <span className="font-medium">
-                                    {selectedItems.reduce((sum, item) => sum + (item.quantity || 0), 0)}
-                                  </span>
+
+                                {/* Vendor Optimization */}
+                                <div className="bg-green-50 p-3 rounded-md border border-green-100">
+                                  <div className="flex items-start gap-2">
+                                    <Sparkles className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />
+                                    <div className="flex-1">
+                                      <div className="flex items-center justify-between">
+                                        <p className="text-sm font-medium text-green-800">Vendor Optimization</p>
+                                        <Button variant="ghost" size="sm" className="h-7 px-2">
+                                          <RefreshCw className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                      <p className="text-xs text-green-700 mt-1">
+                                        2 items can be sourced from the same vendor to reduce shipping costs.
+                                      </p>
+                                    </div>
+                                  </div>
                                 </div>
-                                <div className="flex justify-between items-center">
-                                  <span className="text-muted-foreground">Department</span>
-                                  <Badge variant="outline" className="font-medium">
-                                    {selectedDepartment === "surgery" && "Surgery Department"}
-                                    {selectedDepartment === "emergency" && "Emergency Department"}
-                                    {selectedDepartment === "cardiology" && "Cardiology Department"}
-                                    {selectedDepartment === "radiology" && "Radiology Department"}
-                                    {selectedDepartment === "neurology" && "Neurology Department"}
-                                    {selectedDepartment === "pediatrics" && "Pediatrics Department"}
-                                    {selectedDepartment === "laboratory" && "Laboratory"}
-                                    {selectedDepartment === "it" && "IT Department"}
-                                    {selectedDepartment === "general" && "General Supplies"}
-                                  </Badge>
+
+                                {/* Price Alert */}
+                                <div className="bg-amber-50 p-3 rounded-md border border-amber-100">
+                                  <div className="flex items-start gap-2">
+                                    <Sparkles className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                                    <div className="flex-1">
+                                      <div className="flex items-center justify-between">
+                                        <p className="text-sm font-medium text-amber-800">Price Alert</p>
+                                        <Button variant="ghost" size="sm" className="h-7 px-2">
+                                          <Clock className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                      <p className="text-xs text-amber-700 mt-1">
+                                        Current prices are 15% higher than last quarter. Consider waiting for Q2 pricing.
+                                      </p>
+                                    </div>
+                                  </div>
                                 </div>
-                                {/* <div className="flex justify-between items-center">
-                                  <span className="text-muted-foreground">Amount</span>
-                                  <span className="font-semibold text-primary">${calculateTotal().toFixed(2)}</span>
+
+                                {/* Action Buttons */}
+                                {/* <div className="flex gap-2 pt-2">
+                                  <Button variant="outline" size="sm" className="flex-1 gap-2">
+                                    <Sparkles className="h-4 w-4" />
+                                    Generate Insights
+                                  </Button>
+                                  <Button variant="outline" size="sm" className="flex-1 gap-2">
+                                    <History className="h-4 w-4" />
+                                    View History
+                                  </Button>
                                 </div> */}
                               </div>
                             </div>
+                          </div>
+                        </CardContent>
+                      )}
+                    </Card>
+
+                    {/* Order Summary Cards */}
+                    <div className="space-y-4">
+                      {/* Immediate Purchase Card */}
+                      <Card>
+                        <CardHeader className="border-b bg-muted/30 py-4 px-6">
+                          <div className="flex items-center gap-3">
+                            <CheckCircle2 className="h-5 w-5 text-green-600" />
+                            <CardTitle className="text-lg">Ready to Purchase</CardTitle>
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              {selectedItems.filter(item => item.selectedVendor?.pricePerUnit !== undefined && item.selectedVendor?.pricePerUnit !== null).length} items
+                            </Badge>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-6">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            {/* Left Column - Order Details (larger, spans 2 columns) */}
+                            <div className="md:col-span-2">
+                              {/* Items List */}
+                              <div className="border rounded-lg overflow-hidden">
+                                <div className="divide-y">
+                                  {selectedItems
+                                    .filter(item => item.selectedVendor?.pricePerUnit !== undefined && item.selectedVendor?.pricePerUnit !== null)
+                                    .slice(0, 2) // Only show first 2 items
+                                    .map(item => (
+                                      <div key={item.id} className="p-3 flex items-center justify-between hover:bg-green-50/50">
+                                        <div className="flex items-center gap-3">
+                                          <div className="w-8 h-8 rounded bg-white border flex items-center justify-center">
+                                            <img
+                                              src={item.image || `/placeholder.svg`}
+                                              alt={item.name}
+                                              className="w-full h-full object-contain p-1"
+                                            />
+                                          </div>
+                                          <div>
+                                            <span className="font-medium block">{item.name}</span>
+                                            <span className="text-sm text-muted-foreground">{item.selectedVendor?.name}</span>
+                                          </div>
+                                        </div>
+                                        <div className="text-right">
+                                          <span className="font-medium block">${item.selectedVendor?.pricePerUnit?.toFixed(2)}</span>
+                                          <span className="text-sm text-muted-foreground">Qty: {item.quantity}</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  {selectedItems.filter(item => item.selectedVendor?.pricePerUnit !== undefined && item.selectedVendor?.pricePerUnit !== null).length === 0 && (
+                                    <div className="p-4 text-center text-muted-foreground">
+                                      No items ready for immediate purchase
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
                             
-                            <Separator className="my-6" />
-                            
-                            {/* Section 3: Description */}
-                            <div>
-                              <h3 className="text-base font-semibold mb-4">Description</h3>
-                              <div className="relative">
-                                <Textarea
-                                  placeholder="Add a description for this order..."
-                                  value={orderDescription}
-                                  onChange={(e) => setOrderDescription(e.target.value)}
-                                  className="min-h-[120px] text-base pr-40"
-                                />
-                                <div className="absolute bottom-3 right-3">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 gap-2 text-sm px-3"
-                                    onClick={() => {
-                                      // TODO: Implement AI description generation
-                                      setOrderDescription("Request for Quote for Q2 medical supplies including PPE, catheters, and general medical consumables. Please provide competitive pricing with consideration for bulk discounts. Delivery expected within 2 weeks of order confirmation.")
-                                    }}
-                                  >
-                                    <Sparkles className="h-4 w-4" />
-                                    Write with AMS AI
-                                  </Button>
+                            {/* Right Column - Quick Actions */}
+                            <div className="border-l pl-6">
+                              <div className="space-y-6">
+                                {/* Dates Section
+                                <div>
+                                  <h3 className="text-base font-semibold mb-4">Dates</h3>
+                                  <div className="space-y-4">
+                                    <div>
+                                      <span className="text-muted-foreground mb-1 block">Issue Date</span>
+                                      <Input
+                                        type="date"
+                                        value={issueDate}
+                                        onChange={(e) => setIssueDate(e.target.value)}
+                                        className="h-10 text-base px-3"
+                                      />
+                                    </div>
+                                    <div>
+                                      <span className="text-muted-foreground mb-1 block">Due Date</span>
+                                      <Input
+                                        type="date"
+                                        value={dueDate}
+                                        onChange={(e) => setDueDate(e.target.value)}
+                                        className="h-10 text-base px-3"
+                                      />
+                                    </div>
+                                  </div>
+                                </div> */}
+
+                                {/* Department Selection
+                                <div>
+                                  <h3 className="text-base font-semibold mb-4">Department</h3>
+                                  <div className="flex flex-col gap-1.5">
+                                    <span className="text-muted-foreground text-sm">Select department this order belongs to</span>
+                                    <Select 
+                                      defaultValue="surgery" 
+                                      value={selectedDepartment}
+                                      onValueChange={(value) => setSelectedDepartment(value)}
+                                    >
+                                      <SelectTrigger className="w-full">
+                                        <SelectValue placeholder="Select department" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="surgery">Surgery Department</SelectItem>
+                                        <SelectItem value="emergency">Emergency Department</SelectItem>
+                                        <SelectItem value="cardiology">Cardiology Department</SelectItem>
+                                        <SelectItem value="radiology">Radiology Department</SelectItem>
+                                        <SelectItem value="neurology">Neurology Department</SelectItem>
+                                        <SelectItem value="pediatrics">Pediatrics Department</SelectItem>
+                                        <SelectItem value="laboratory">Laboratory</SelectItem>
+                                        <SelectItem value="it">IT Department</SelectItem>
+                                        <SelectItem value="general">General Supplies</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div> */}
+
+                                {/* Quick Actions */}
+                                <div>
+                                  {/* <h3 className="text-base font-semibold mb-4">Quick Actions</h3> */}
+                                  <div className="space-y-3">
+                                    <Button
+                                      className="w-full justify-start items-center gap-2 h-11 text-base"
+                                      onClick={handleProceedToOrderConfirmation}
+                                    >
+                                      <ShoppingCart className="h-5 w-5" />
+                                      <span>Proceed to Checkout</span>
+                                    </Button>
+                                    <Button
+                                      className="w-full justify-start items-center gap-2 h-11 text-base"
+                                      variant="outline"
+                                      onClick={handleProceedToContactMethod}
+                                    >
+                                      <PhoneCall className="h-5 w-5" />
+                                      <span>Call with AMS</span>
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
                             </div>
                           </div>
-                          
-                          {/* Right Column - RFQ Info & Actions (smaller, 1 column) */}
-                          <div className="border-l pl-6">
-                            {/* RFQ Preview Section */}
-                            <div className="mb-6">
-                              <h3 className="text-base font-semibold mb-4">RFQ Preview</h3>
-                              
-                              {showRfqDialog ? (
-                                <Card>
-                                  <CardContent className="p-4">
-                                    <div className="mb-3">
-                                      <h4 className="text-sm font-semibold text-primary">RFQ-{new Date().getFullYear()}-{String(new Date().getMonth() + 1).padStart(2, '0')}{String(new Date().getDate()).padStart(2, '0')}</h4>
-                                      <div className="flex justify-between items-center mt-1 text-sm">
-                                        <span className="text-muted-foreground">Items:</span>
-                                        <span>{selectedItems.length}</span>
-                        </div>
-                                      <div className="flex justify-between items-center mt-1 text-sm">
-                                        <span className="text-muted-foreground">Vendors:</span>
-                                        <span>{Object.keys(selectedVendors || {}).length}</span>
+                        </CardContent>
+                      </Card>
+
+                      {/* RFQ Card */}
+                      <Card>
+                        <CardHeader className="border-b bg-muted/30 py-4 px-6">
+                          <div className="flex items-center gap-3">
+                            <FileText className="h-5 w-5 text-blue-600" />
+                            <CardTitle className="text-lg">RFQ</CardTitle>
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                              3 items
+                            </Badge>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-6">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            {/* Left Column - RFQ Details (larger, spans 2 columns) */}
+                            <div className="md:col-span-2">
+                              {/* Items List */}
+                              <div className="border rounded-lg overflow-hidden">
+                                <div className="divide-y">
+                                  {selectedItems
+                                    // .filter(item => item.selectedVendor?.pricePerUnit === undefined || item.selectedVendor?.pricePerUnit === null)
+                                    .slice(0, 3) // Show first 3 items
+                                    .map(item => (
+                                      <div key={item.id} className="p-3 flex items-center justify-between hover:bg-blue-50/50">
+                                        <div className="flex items-center gap-3">
+                                          <div className="w-8 h-8 rounded bg-white border flex items-center justify-center">
+                                            <img
+                                              src={item.image || `/placeholder.svg`}
+                                              alt={item.name}
+                                              className="w-full h-full object-contain p-1"
+                                            />
+                                          </div>
+                                          <div>
+                                            <span className="font-medium block">{item.name}</span>
+                                            <span className="text-sm text-muted-foreground">
+                                              {item.selectedVendor?.name || 'No vendor selected'}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <Badge variant="outline" className="text-blue-600 border-blue-200">RFQ Needed</Badge>
+                                          <span className="text-sm text-muted-foreground">Qty: {item.quantity}</span>
+                                        </div>
                                       </div>
-                                      <div className="flex justify-between items-center mt-1 text-sm">
-                                        <span className="text-muted-foreground">Department:</span>
-                                        <span>
+                                    ))}
+                                  {/* {selectedItems.filter(item => item.selectedVendor?.pricePerUnit === undefined || item.selectedVendor?.pricePerUnit === null).length === 0 && (
+                                    <div className="p-4 text-center text-muted-foreground">
+                                      No items require RFQ
+                                    </div>
+                                  )} */}
+                                </div>
+                              </div>
+
+                              {/* RFQ Notes */}
+                              <div className="mt-6">
+                                <h3 className="text-base font-semibold mb-4">RFQ Notes</h3>
+                                <div className="relative">
+                                  <Textarea
+                                    placeholder="Add notes for vendors regarding the RFQ..."
+                                    value={rfqNotes}
+                                    onChange={(e) => setRfqNotes(e.target.value)}
+                                    className="min-h-[120px] text-base pr-40"
+                                  />
+                                  <div className="absolute bottom-3 right-3">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 gap-2 text-sm px-3"
+                                      onClick={() => {
+                                        setRfqNotes("Request for Quote for medical supplies. Please provide competitive pricing with consideration for bulk discounts. Include delivery timelines and any available certifications. We require compliance with all relevant medical standards and regulations.")
+                                      }}
+                                    >
+                                      <Sparkles className="h-4 w-4" />
+                                      Write with AMS AI
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Right Column - Quick Actions */}
+                            <div className="border-l pl-6">
+                              <div className="space-y-6">
+                                {/* RFQ Preview */}
+                                <div>
+                                  {/* <h3 className="text-base font-semibold mb-4">RFQ Preview</h3> */}
+                                  <div className="border rounded-lg p-4 bg-gray-50">
+                                    <div className="space-y-3">
+                                      {/* <div className="flex items-center justify-between">
+                                        <span className="text-sm font-medium">Items</span>
+                                        <span className="text-sm text-muted-foreground">
+                                          {selectedItems.filter(item => item.selectedVendor?.pricePerUnit === undefined || item.selectedVendor?.pricePerUnit === null).length} items
+                                        </span>
+                                      </div> */}
+                                      {/* <div className="flex items-center justify-between">
+                                        <span className="text-sm font-medium">Total Units</span>
+                                        <span className="text-sm text-muted-foreground">
+                                          {selectedItems
+                                            .filter(item => item.selectedVendor?.pricePerUnit === undefined || item.selectedVendor?.pricePerUnit === null)
+                                            .reduce((sum, item) => sum + (item.quantity || 0), 0)} units
+                                        </span>
+                                      </div> */}
+                                      {/* <div className="flex items-center justify-between">
+                                        <span className="text-sm font-medium">Department</span>
+                                        <Badge variant="outline" className="text-xs">
                                           {selectedDepartment === "surgery" && "Surgery"}
                                           {selectedDepartment === "emergency" && "Emergency"}
                                           {selectedDepartment === "cardiology" && "Cardiology"}
@@ -2328,87 +2160,58 @@ export default function CreateOrderPage() {
                                           {selectedDepartment === "laboratory" && "Laboratory"}
                                           {selectedDepartment === "it" && "IT"}
                                           {selectedDepartment === "general" && "General"}
-                                        </span>
-                                      </div>
-                                      <div className="flex justify-between items-center mt-1 text-sm">
-                                        <span className="text-muted-foreground">Budget:</span>
-                                        <div className="flex items-center gap-1">
-                                          <span>${calculateTotal().toFixed(2)}</span>
-                                          {selectedDepartment === "surgery" && calculateTotal() > 2000 && (
-                                            <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
-                                          )}
-                                        </div>
-                                      </div>
-                                      <div className="flex justify-between items-center mt-1 text-sm">
-                                        <span className="text-muted-foreground">Status:</span>
-                                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                                          Draft
                                         </Badge>
+                                      </div> */}
+                                      <div className="pt-2">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="w-full gap-2"
+                                          onClick={() => setShowRfqDialog(true)}
+                                        >
+                                          <FileText className="h-4 w-4" />
+                                          Preview Full RFQ
+                                        </Button>
                                       </div>
                                     </div>
-                          <Button
-                                      size="sm" 
-                                      variant="outline" 
-                                      className="w-full"
+                                  </div>
+                                </div>
+
+                                {/* Quick Actions */}
+                                <div>
+                                  <h3 className="text-base font-semibold mb-4">Quick Actions</h3>
+                                  <div className="space-y-3">
+                                    <Button
+                                      className="w-full justify-start items-center gap-2 h-11 text-base"
+                                      onClick={handleGenerateRFQ}
+                                    >
+                                      <FileText className="h-5 w-5" />
+                                      <span>Generate RFQ</span>
+                                    </Button>
+                                    <Button
+                                      className="w-full justify-start items-center gap-2 h-11 text-base"
+                                      variant="outline"
+                                      onClick={handleProceedToContactMethod}
+                                    >
+                                      <PhoneCall className="h-5 w-5" />
+                                      <span>Call with AMS</span>
+                                    </Button>
+                                    <Button
+                                      className="w-full justify-start items-center gap-2 h-11 text-base"
+                                      variant="outline"
                                       onClick={() => setShowRfqDialog(true)}
                                     >
-                                      <FileText className="h-4 w-4 mr-2" />
-                                      View Details
+                                      <Send className="h-5 w-5" />
+                                      <span>Send RFQ</span>
                                     </Button>
-                                  </CardContent>
-                                </Card>
-                              ) : (
-                                <Card className="border-dashed bg-muted/20">
-                                  <CardContent className="p-6">
-                                    <div className="flex flex-col items-center justify-center text-center">
-                                      <FileText className="h-8 w-8 text-muted-foreground mb-2" />
-                                      <p className="text-sm text-muted-foreground mb-1">
-                                        No RFQ generated yet
-                                      </p>
-                                      <p className="text-xs text-muted-foreground">
-                                        Click "Generate RFQ" to create one
-                                      </p>
-                                    </div>
-                                  </CardContent>
-                                </Card>
-                              )}
-                            </div>
-                            
-                            <Separator className="my-6" />
-                            
-                            {/* Quick Actions */}
-                            <div>
-                              <h3 className="text-base font-semibold mb-4">Quick Actions</h3>
-                              <div className="space-y-3">
-                                <Button
-                                  className="w-full justify-start items-center gap-2 h-11 text-base"
-                            onClick={handleGenerateRFQ}
-                          >
-                            <FileText className="h-5 w-5" />
-                                  <span>Generate RFQ</span>
-                          </Button>
-                          <Button
-                                  className="w-full justify-start items-center gap-2 h-11 text-base"
-                                  variant="outline"
-                                  disabled={!showRfqDialog}
-                                >
-                                  <Send className="h-5 w-5" />
-                                  <span>Send RFQ</span>
-                                </Button>
-                                <Button
-                                  className="w-full justify-start items-center gap-2 h-11 text-base"
-                            variant="outline"
-                            onClick={handleProceedToOrderConfirmation}
-                          >
-                                  <PhoneCall className="h-5 w-5" />
-                                  <span>Call with AMS</span>
-                          </Button>
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                        </CardContent>
+                      </Card>
+                    </div>
                   </div>
                 )}
               </>

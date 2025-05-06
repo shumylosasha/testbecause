@@ -302,6 +302,10 @@ export default function InventoryItemPage() {
                       <p className="text-sm text-muted-foreground">Unit Price</p>
                       <p>${item.unitPrice.toFixed(2)}</p>
                     </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Swaps</p>
+                      <p className="inline-flex items-center justify-center px-2 py-1 bg-blue-100 text-blue-800 rounded-md">2</p>
+                    </div>
                   </div>
 
                   <div className="pt-4">
